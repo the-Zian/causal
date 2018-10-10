@@ -16,7 +16,6 @@ knitr::opts_knit$set(root.dir='..')
 ```
 
 ```{r rmd, message=FALSE}
-# test
 library(data.table)
 library(arm)
 library(ggplot2)
