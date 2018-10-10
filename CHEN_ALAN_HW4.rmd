@@ -1,0 +1,182 @@
+---
+title: Causal Inference Homework Assignment 4
+subtitle: The role of propensity scores in observational study
+author: Alan Z Chen
+date: "`r format(Sys.time(), '%B %Y')`"
+header-includes:
+    - \usepackage{amsmath}
+output: pdf_document
+---
+
+```{r rmd_setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+knitr::opts_chunk$set(include=TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE)
+knitr::opts_knit$set(root.dir='..')
+```
+
+```{r rmd, message=FALSE}
+library(data.table)
+library(arm)
+library(ggplot2)
+library(RColorBrewer)
+
+# Set global ggplot theme
+theme_set(theme_minimal())
+# Define global color palettes
+col.RdBl.2 <- brewer.pal(3, 'RdBu')[-2]
+```
+
+
+# Objective  
+This assignment will give you the opportunity to practice several different propensity score approaches to causal inference. In addition you will be asked to interpret the resulting output and discuss the assumptions necessary for causal inference.
+
+
+# Problem Statement  
+In this assignment will use data from a constructed observational study. The data and an associated data dictionary are available in this folder. The treatment group for the study that the data are drawn from is the group of children who participated in the IHDP intervention discussed in class. The research question of interest focuses on the effect of the IHDP intervention on age 3 IQ scores for the children that participated in it. The data for the comparison sample of children was pulled from the National Longitudinal Study of Youth during a similar period of time that the data were collected for the IHDP study.
+
+
+## Question 1: Load the data and choose confounders (Step 1)
+
+\texttt{ANSWER:}
+```{r Q1}
+load('data/hw4.rdata')
+hw4 <- data.table(hw4)
+
+# Pick confounders based on correlation to treatment and outcome variables
+cor.mat <- cor(hw4)
+round(cor.mat['treat',], 2)
+round(cor.mat['ppvtr.36',], 2)
+
+confounders <- unique(c(names(which(abs(cor.mat['treat', ])>=0.3)), names(which(abs(cor.mat['ppvtr.36', ])>=0.3))))
+confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
+
+# Subset data for analysis
+dt <- hw4[bw<3000, unique(c('ppvtr.36', 'treat', confounders)), with=FALSE]
+```
+
+
+## Question 2: Estimate the propensity score (Step 2)
+
+\texttt{ANSWER:}
+```{r Q2}
+ps.m1 <- glm(treat ~ . - ppvtr.36, data=dt, family=binomial)
+dt$psc <- ps.m1$fitted.values
+```
+
+
+## Question 3: Restructure your data through matching. [Or at least create the weights variable that will let you to do so in the following steps] (Step 3)
+
+- (a) The first thing you need to be clear on before restructuring your data is the estimand. Given the description above about the research question, what is the estimand of interest?  
+- (b) First please perform *one-to-one nearest neighbor matching with replacement* using your estimated propensity score from Question 2. Perform this matching using the `matching` command in the arm package. The *"cnts"* variable in the output reflects the number of times each control observation was used as a match (the length is equal to the number of control observations). Use the output of this function to create a weight variable that  
+    - 1) equals one for treated observations and  
+    - 2) equals the number of times used as a match for non- treated observations.  
+
+\texttt{ANSWER:}  
+The IHDP intervention targeted children that were born premature and with low birth weight, thus the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
+
+```{r Q3}
+matches <- matching(z=dt$treat, score=dt$psc, replace=TRUE)
+dt[treat==1, w:=1]
+dt[treat==0, w:=matches$cnts]
+```
+
+
+## Question 4: Check overlap and balance. (Step 4)
+
+### (a) Examining Overlap. Check overlap on the *unmatched* data using some diagnostic plots. Check overlap for the propensity scores as well as two other covariates.
+
+\texttt{ANSWER:}
+```{r Q4a}
+# Paired, inverted histograms: propensity scores
+nbins <- 40
+ggplot(dt) +
+    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(psc, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(psc, y=-..count.., color=col.RdBl.2[1])) +
+    coord_cartesian(ylim=c(-30, 50)) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    labs(x='Propensity Score', y='Frequency', title='Overlap of Propensity Score between Groups')
+
+# Paired, inverted histograms: mother's education
+nbins <- 12
+ggplot(dt) +
+    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=-..count.., color=col.RdBl.2[1])) +
+    scale_x_continuous(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    labs(x='', y='Frequency', title='Overlap of Mother\'s Education between Groups')
+
+# Paired, inverted histograms: weeks born preterm
+nbins <- 20
+ggplot(dt) +
+    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(preterm, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(preterm, y=-..count.., color=col.RdBl.2[1])) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    coord_cartesian(ylim=c(-100,150)) +
+    labs(x='Weeks Preterm', y='Frequency', title='Overlap of Number Weeks Baby Born Preterm between Groups')
+
+# Paired, inverted histograms: mother's age at birth
+nbins <- 40
+ggplot(dt) +
+    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(momage, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(momage, y=-..count.., color=col.RdBl.2[1])) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    labs(x='Mother\'s Age at Birth', y='Frequency', title='Overlap of Mother\'s Age at Birth between Groups')
+
+# Scatterplot: mother's age at birth X mother's education level
+ggplot(dt, aes(x=momage, y=as.factor(momed), color=as.factor(treat))) +
+    geom_point(alpha=0.8, position=position_jitter(width=.5, height=.3)) +
+    scale_y_discrete(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    labs(x='Mother\'s Age at Birth', y='', title='Scatterplot of Mother\'s Education Level and Age at Birth')
+```
+
+### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
+
+\texttt{ANSWER:}  
+Since our estimand of interest is the \texttt{ATT}, we need similar observations from the control group to use as our counterfactuals for the treatment group. The plots above show sufficient overlap (relative to the treated) between the two groups in propensity scores, mother's education level, and number of weeks the baby was born preterm. There is overlap in mother's age at birth from approximately around age values 25-35, but there are no counterfactual observations for the treated children with mothers that are either younger or older than that 25-35 age range.
+
+### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
+
+- 1) Mean in the unmatched treatment group  
+- 2) Mean in the unmatched control group  
+- 3) Mean in the matched treatment group  
+- 4) Mean in the matched control group  
+- 5) Unmatched mean difference (standardized for continuous variables, not standardized for binary variables)  
+- 6) Matched mean difference (standardized for continuous variables, not standardized for binary variables)  
+- 7) Ratio of standard deviations across unmatched groups (control/treated)  
+- 8) Ratio of standard deviations across matched groups (control/treated)
+
+\texttt{ANSWER:}
+```{r Q4c}
+check_balance <- function(data, covs, wts) {
+    means.unmatched <- data[, lapply(.SD, mean), by=treat, .SDcols=covs]
+    means.matched <- data[w>0, lapply(.SD, mean), by=treat, .SDcols=covs]
+}
+```
+
+### (d) How do you interpret the resulting balance? In particular what are your concerns with regard to covariates that are not well balanced (write about 5 or 6 sentences).
+
+### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
+
+
+## Question 5: Repeat steps 2-4 within the matching framework.
+
+
+## Question 6: Repeat steps 2-4, but this time using IPTW.
+
+
+## Question 7: Comparative balance table
+Create a table with columns 6 and 8 from your function for each of the matching and weighting methods performed above. Which approach would you choose and why? (1-2 paragraphs at most)
+
+
+## Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5)
+
+
+## Question 9: Assumptions
+
+
+## Question 10: Causal Interpretation
+
+
+## Question 11: Comparison to linear regression
