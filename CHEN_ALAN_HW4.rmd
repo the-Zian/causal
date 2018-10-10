@@ -80,8 +80,6 @@ The IHDP intervention targeted children that were born premature and with low bi
 ```{r Q3}
 matches <- matching(z=dt$treat, score=dt$psc, replace=TRUE)
 wts <- matches$cnts
-dt[treat==1, w:=1]
-dt[treat==0, w:=matches$cnts]
 ```
 
 
@@ -170,7 +168,8 @@ ratio_sd <- function(x, data, matched=FALSE) {
 
 check_balance <- function(data, X, wts) {
     # Store weights in data
-    data[, w:=ifelse(treat==1, 1, wts)]
+    data[treat==0, w:=wts]
+    data[treat==1, w:=1]
    
     # 1-2. means in unmatched data
     means.unmatched <- data[, lapply(.SD, mean), by=treat, .SDcols=X]
@@ -205,6 +204,11 @@ check_balance <- function(data, X, wts) {
 ```
 
 ### (d) How do you interpret the resulting balance? In particular what are your concerns with regard to covariates that are not well balanced (write about 5 or 6 sentences).
+
+\texttt{ANSWER:}
+```{r Q4d}
+check_balance(dt, confounders, wts)
+```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
 
