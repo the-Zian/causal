@@ -23,6 +23,7 @@ library(rlang)
 library(RColorBrewer)
 library(stats)
 library(Hmisc)
+library(caret)
 
 # Set global ggplot theme
 theme_set(theme_minimal())
@@ -54,7 +55,6 @@ confounders = names(which(apply(abs(corr_mat) >= 0.3 & abs(corr_mat) != 1, 2, su
 
 # Subset data for analysis
 dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
-dt[, momed:=as.factor(momed)]
 ```
 
 
@@ -214,6 +214,87 @@ check_balance(dt, confounders, wts)
 
 
 ## Question 5: Repeat steps 2-4 within the matching framework.
+
+\texttt{ANSWER:}
+```{r Q5}
+ps.m2 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
+summary(ps.m2)
+dt$psc_probit <- ps.m2$fitted.values
+confusionMatrix(ifelse(dt$psc_probit>0.5,1,0), dt$treat)
+
+ps.m3 <- glm(treat ~ .^2, data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
+summary(ps.m3)
+dt$psc_full <- ps.m3$fitted.values
+confusionMatrix(ifelse(dt$psc_full>0.5,1,0), dt$treat)
+
+library(randomForest)
+m.rf = randomForest(as.factor(treat) ~ ., data=dt[,c('treat',confounders),with=F], ntree = 10)
+dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
+confusionMatrix(ifelse(dt$psc_rf>0.5,1,0), dt$treat)
+
+library(nnet)
+dt_nnet = as.data.frame(dt[,c('treat',confounders),with=F])
+dt_nnet[,which(sapply(dt_nnet,class)=="numeric")] = scale(dt_nnet[,which(sapply(dt_nnet,class)=="numeric")])
+dt_nnet$treat = as.factor(dt_nnet$treat)
+
+nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout = F, maxit=200)
+dt$psc_nn = predict(nn_mod)
+confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
+
+# Mahalo
+myMH = function(trtnms, ctrnms, inv.cov, data){
+  covars = dimnames(inv.cov)[[1]]
+  xdiffs = as.matrix(data[trtnms,covars])
+  xdiffs = xdiffs - as.matrix(data[ctrnms, covars])
+  rowSums((xdiffs %*% inv.cov) * xdiffs)
+}
+
+dt_mahalo = as.data.frame(dt)
+inv_cov_mat = solve(cov(dt_mahalo[,confounders]))
+trtnms = row.names(dt_mahalo[as.logical(dt_mahalo$treat),])
+ctrnms = row.names(dt_mahalo[!as.logical(dt_mahalo$treat),])
+mahalo_dist = outer(trtnms,ctrnms,FUN = myMH, inv.cov = inv_cov_mat, data = dt_mahalo)
+
+matches = apply(mahalo_dist,1, function(x) which(x == min(x)))
+match_results = as.data.frame(cbind(seq(1,290), matches+290))
+colnames(match_results) = c('trt.idx','ctr.idx')
+
+counts = match_results %>% 
+  group_by(ctr.idx) %>%
+  dplyr::summarize(w_mahalo=n())
+
+dt_mahalo_2 = dt_mahalo %>%
+  mutate(id = as.integer(rownames(dt_mahalo))) %>%
+  left_join(counts, by = c("id" = "ctr.idx")) %>%
+  mutate(w_mahalo = treat + ifelse(is.na(w_mahalo),0,w_mahalo))
+
+dt$w_mahalo = dt_mahalo_2$w_mahalo
+
+# Rematching
+matches <- matching(z=dt$treat, score=dt$psc_probit, replace=TRUE)
+dt[treat==1, w_probit:=1]
+dt[treat==0, w_probit:=matches$cnts]
+
+matches <- matching(z=dt$treat, score=dt$psc_full, replace=TRUE)
+dt[treat==1, w_full:=1]
+dt[treat==0, w_full:=matches$cnts]
+
+matches <- matching(z=dt$treat, score=dt$psc_rf, replace=TRUE)
+dt[treat==1, w_rf:=1]
+dt[treat==0, w_rf:=matches$cnts]
+
+matches <- matching(z=dt$treat, score=dt$psc_nn, replace=TRUE)
+dt[treat==1, w_nn:=1]
+dt[treat==0, w_nn:=matches$cnts]
+
+# OVERLAP
+# Paired, inverted histograms: propensity scores
+nbins <- 40
+examine_overlap(dt,40,var='psc_probit',var_name='Propensity Score (Probit Model)',ylim=c(-30,50),xlab='Propensity Score')
+examine_overlap(dt,40,var='psc_full',var_name='Propensity Score (Probit Full Model)',ylim=c(-30,50),xlab='Propensity Score')
+examine_overlap(dt,40,var='psc_rf',var_name='Propensity Score (RF Model)',ylim=c(-30,50),xlab='Propensity Score')
+examine_overlap(dt,40,var='psc_nn',var_name='Propensity Score (NN Model)',ylim=c(-30,50),xlab='Propensity Score')
+```
 
 
 ## Question 6: Repeat steps 2-4, but this time using IPTW.
