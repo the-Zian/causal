@@ -19,7 +19,10 @@ knitr::opts_knit$set(root.dir='..')
 library(data.table)
 library(arm)
 library(ggplot2)
+library(rlang)
 library(RColorBrewer)
+library(stats)
+library(Hmisc)
 
 # Set global ggplot theme
 theme_set(theme_minimal())
@@ -52,7 +55,8 @@ confounders <- unique(c(names(which(abs(cor.mat['treat', ])>=0.3)), names(which(
 confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
 
 # Subset data for analysis
-dt <- hw4[bw<3000, unique(c('ppvtr.36', 'treat', confounders)), with=FALSE]
+dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
+dt[, momed:=as.factor(momed)]
 ```
 
 
@@ -77,6 +81,7 @@ The IHDP intervention targeted children that were born premature and with low bi
 
 ```{r Q3}
 matches <- matching(z=dt$treat, score=dt$psc, replace=TRUE)
+wts <- matches$cnts
 dt[treat==1, w:=1]
 dt[treat==0, w:=matches$cnts]
 ```
@@ -97,15 +102,6 @@ ggplot(dt) +
     scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
     labs(x='Propensity Score', y='Frequency', title='Overlap of Propensity Score between Groups')
 
-# Paired, inverted histograms: mother's education
-nbins <- 12
-ggplot(dt) +
-    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=-..count.., color=col.RdBl.2[1])) +
-    scale_x_continuous(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    labs(x='', y='Frequency', title='Overlap of Mother\'s Education between Groups')
-
 # Paired, inverted histograms: weeks born preterm
 nbins <- 20
 ggplot(dt) +
@@ -115,6 +111,34 @@ ggplot(dt) +
     coord_cartesian(ylim=c(-100,150)) +
     labs(x='Weeks Preterm', y='Frequency', title='Overlap of Number Weeks Baby Born Preterm between Groups')
 
+# Scatterplot: mother's age at birth X mother's education level
+ggplot(dt, aes(x=momage, y=as.factor(momed), color=as.factor(treat))) +
+    geom_point(alpha=0.8, position=position_jitter(width=.5, height=.3)) +
+    scale_y_discrete(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    labs(x='Mother\'s Age at Birth', y='', title='Scatterplot of Mother\'s Education Level and Age at Birth')
+
+# Paired, inverted histograms: days child stayed in hospital after birth
+nbins <- 20
+ggplot(dt) +
+    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(dayskidh, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(dayskidh, y=-..count.., color=col.RdBl.2[1])) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    coord_cartesian(ylim=c(-100,75)) +
+    labs(x='Days in Hospital', y='Frequency', title='Overlap of Number Days Child in Hospital After Birth between Groups')
+
+# FUNCITON NOT WORKING
+hist.plot <- function(data, var, nbins, ylim, cols=col.RdBl.2) {
+    var <- enquo(var)
+    p <- ggplot(data) +
+        geom_histogram(data=data[treat==0 & w>0,], bins=nbins, fill='grey', alpha=0.1, aes_(var, y='..count..', color=cols[2])) +
+        geom_histogram(data=data[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes_(var, y='-..count..', color=cols[1])) +
+        coord_cartesian(ylim=ylim) +
+        scale_color_manual(values=rev(cols), labels=c('Control', 'Treated', name=''))
+}
+```
+
+```{r old.plots}
 # Paired, inverted histograms: mother's age at birth
 nbins <- 40
 ggplot(dt) +
@@ -123,12 +147,14 @@ ggplot(dt) +
     scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
     labs(x='Mother\'s Age at Birth', y='Frequency', title='Overlap of Mother\'s Age at Birth between Groups')
 
-# Scatterplot: mother's age at birth X mother's education level
-ggplot(dt, aes(x=momage, y=as.factor(momed), color=as.factor(treat))) +
-    geom_point(alpha=0.8, position=position_jitter(width=.5, height=.3)) +
-    scale_y_discrete(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
+# Paired, inverted histograms: mother's education
+nbins <- 12
+ggplot(dt) +
+    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=-..count.., color=col.RdBl.2[1])) +
+    scale_x_continuous(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
     scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    labs(x='Mother\'s Age at Birth', y='', title='Scatterplot of Mother\'s Education Level and Age at Birth')
+    labs(x='', y='Frequency', title='Overlap of Mother\'s Education between Groups')
 ```
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
@@ -149,9 +175,69 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 \texttt{ANSWER:}
 ```{r Q4c}
-check_balance <- function(data, covs, wts) {
-    means.unmatched <- data[, lapply(.SD, mean), by=treat, .SDcols=covs]
-    means.matched <- data[w>0, lapply(.SD, mean), by=treat, .SDcols=covs]
+mean_diff.old <- function(v, data, wtd=rep(1, length(v))) {
+    if (wtd) {
+        mean.diffs <- data[w>0, .(mean.diff=weighted.mean(get(v)), w=w), by=treat]
+        setkeyv(mean.diffs, c('treat', 'mean.diff'))
+    } else {
+        mean.diffs <- data[, .(mean.diff=mean(get(v))), by=treat]
+    }
+    binary <- all(range(v) == c(0,1))
+    if (!binary) {
+        # If continuous variable, standardize mean difference
+        if (wtd) {
+            mean.diffs$mean.diff <- mean.diffs$mean.diff/sqrt(sum(data[, sqrt(wtd.var(get(v), w=w)), by=treat][,2]))
+        } else {
+            mean.diffs$mean.diff <- mean.diffs$mean.diff/sqrt(sum(data[, sd(get(v)), by=treat][,2]))
+        }
+    }
+    return(mean.diffs)
+}
+
+mean_diff <- function(x, data, matched=FALSE) {
+    treat <- data[treat==1, get(x)]
+    if (matched) {
+        ctrl <- data[treat==0 & w>0, get(x)]
+        wts <- data[treat==0 & w>0, get(x)]
+    } else {
+        ctrl <- data[treat==0, get(x)]
+        wts<- data[treat==0, w]
+    }
+
+    mean.treat <- mean(treat)
+    mean.ctrl <- weighted.mean(ctrl, wts)
+    diff <- mean.treat - mean.ctrl
+    
+    # Standardize means for continuous variables
+    if (all(range(data[, get(x)]) == c(0,1))) {
+        sd.treat <- sd(treat)
+        sd.ctrl <- sqrt(wtd.var(ctrl, wts))
+        
+        diff <- diff / sqrt(sd.treat + sd.ctrl)
+    }
+    return(diff)
+}
+
+check_balance <- function(data, X, wts) {
+    # REQUIRES data.table
+    # Create weights in data
+    data[, w:=ifelse(treat==1, 1, wts)]
+    # Keep only weights for comparisons used
+    wts <- wts[wts > 0]
+    # 1-2. means in unmatched data
+    means.unmatched <- data[, lapply(.SD, mean), by=treat, .SDcols=X]
+    means.unmatched[, matched:=0]
+    # 3-4. means in matched data
+    means.matched <- data[w>0, lapply(.SD, weighted.mean, w=w, by=treat, .SDcols=X]
+    means.matched[, matched:=1]
+    # 5-6. mean differences of confounders
+    #mean.diff.unmatched <- lapply(confounders, mean_diff.old, data=data)
+    #mean.diff.matched <- lapply(confounders, mean_diff.old, data=data[w>0,], wtd=TRUE)
+    mean.diffs.unmatched <- sapply(X, mean_diff, data)
+    mean.diffs.matched <- sapply(X, mean_diff, data, TRUE)
+    # 7-8. ratio of sd
+
+    return(rbind(means.unmatched, means.matched))
 }
 ```
 
