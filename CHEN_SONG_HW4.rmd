@@ -338,9 +338,12 @@ r_ate = dt$treat/dt$psc + (1-dt$treat)/(1-dt$psc)
 
 For estimating the ATT, define the weight as follows:
 $$\omega(Z,x) = Z + (1-Z) * \frac{\hat{\epsilon}(x)}{1-\hat{\epsilon}(x)}$$
-
 ```{r}
 r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
+```
+
+```{r}
+iptw.balance <- check_balance(dt, confounders, r_att)
 ```
 
 ## Question 7: Comparative balance table
