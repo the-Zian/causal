@@ -47,12 +47,10 @@ load('data/hw4.rdata')
 hw4 <- data.table(hw4)
 
 # Pick confounders based on correlation to treatment and outcome variables
-cor.mat <- cor(hw4)
-round(cor.mat['treat',], 2)
-round(cor.mat['ppvtr.36',], 2)
+corr_mat = cor(hw4)
 
-confounders <- unique(c(names(which(abs(cor.mat['treat', ])>=0.3)), names(which(abs(cor.mat['ppvtr.36', ])>=0.3))))
-confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
+corr_mat = rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
+confounders = names(which(apply(abs(corr_mat) >= 0.3 & abs(corr_mat) != 1, 2, sum) > 0))
 
 # Subset data for analysis
 dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
@@ -64,7 +62,7 @@ dt[, momed:=as.factor(momed)]
 
 \texttt{ANSWER:}
 ```{r Q2}
-ps.m1 <- glm(treat ~ . - ppvtr.36, data=dt, family=binomial)
+ps.m1 <- glm(treat ~ . - ppvtr.36, data=dt, family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
 ```
 
@@ -94,67 +92,21 @@ dt[treat==0, w:=matches$cnts]
 \texttt{ANSWER:}
 ```{r Q4a}
 # Paired, inverted histograms: propensity scores
-nbins <- 40
-ggplot(dt) +
-    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(psc, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(psc, y=-..count.., color=col.RdBl.2[1])) +
-    coord_cartesian(ylim=c(-30, 50)) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    labs(x='Propensity Score', y='Frequency', title='Overlap of Propensity Score between Groups')
-
-# Paired, inverted histograms: weeks born preterm
-nbins <- 20
-ggplot(dt) +
-    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(preterm, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(preterm, y=-..count.., color=col.RdBl.2[1])) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    coord_cartesian(ylim=c(-100,150)) +
-    labs(x='Weeks Preterm', y='Frequency', title='Overlap of Number Weeks Baby Born Preterm between Groups')
-
-# Scatterplot: mother's age at birth X mother's education level
-ggplot(dt, aes(x=momage, y=as.factor(momed), color=as.factor(treat))) +
-    geom_point(alpha=0.8, position=position_jitter(width=.5, height=.3)) +
-    scale_y_discrete(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    labs(x='Mother\'s Age at Birth', y='', title='Scatterplot of Mother\'s Education Level and Age at Birth')
-
-# Paired, inverted histograms: days child stayed in hospital after birth
-nbins <- 20
-ggplot(dt) +
-    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(dayskidh, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(dayskidh, y=-..count.., color=col.RdBl.2[1])) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    coord_cartesian(ylim=c(-100,75)) +
-    labs(x='Days in Hospital', y='Frequency', title='Overlap of Number Days Child in Hospital After Birth between Groups')
-
-# FUNCITON NOT WORKING
-hist.plot <- function(data, var, nbins, ylim, cols=col.RdBl.2) {
-    var <- enquo(var)
-    p <- ggplot(data) +
-        geom_histogram(data=data[treat==0 & w>0,], bins=nbins, fill='grey', alpha=0.1, aes_(var, y='..count..', color=cols[2])) +
-        geom_histogram(data=data[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes_(var, y='-..count..', color=cols[1])) +
-        coord_cartesian(ylim=ylim) +
-        scale_color_manual(values=rev(cols), labels=c('Control', 'Treated', name=''))
+examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score', options=NULL){
+  dt_plot = dt[, c('treat',var), with=F]
+  colnames(dt_plot) = c('treat','X')
+  ggplot(dt_plot) +
+      geom_histogram(data=dt_plot[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=..count.., color=col.RdBl.2[2])) +
+      geom_histogram(data=dt_plot[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=-..count.., color=col.RdBl.2[1])) +
+      coord_cartesian(ylim=ylim) +
+      scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+      labs(x=xlab, y='Frequency', title=paste('Overlap of ',var_name,' between Groups',sep='')) +
+      options 
 }
-```
 
-```{r old.plots}
-# Paired, inverted histograms: mother's age at birth
-nbins <- 40
-ggplot(dt) +
-    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(momage, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(momage, y=-..count.., color=col.RdBl.2[1])) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    labs(x='Mother\'s Age at Birth', y='Frequency', title='Overlap of Mother\'s Age at Birth between Groups')
-
-# Paired, inverted histograms: mother's education
-nbins <- 12
-ggplot(dt) +
-    geom_histogram(data=dt[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(momed, y=-..count.., color=col.RdBl.2[1])) +
-    scale_x_continuous(labels=c('Less than HS', 'High School', 'Less than college', 'College')) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    labs(x='', y='Frequency', title='Overlap of Mother\'s Education between Groups')
+examine_overlap(dt, 40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score')
+examine_overlap(dt, 12, var='momed', var_name='Mother\'s Education', ylim=c(-150,450), xlab='Mother\'s Education', options=scale_x_continuous(labels=c('Less than HS', 'High School', 'Less than college', 'College')))
+examine_overlap(dt, 20, var='preterm', var_name='Number Weeks Baby Born Preterm', ylim=c(-100,150), xlab='Weeks Preterm')
 ```
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
@@ -175,41 +127,22 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 \texttt{ANSWER:}
 ```{r Q4c}
-mean_diff.old <- function(v, data, wtd=rep(1, length(v))) {
-    if (wtd) {
-        mean.diffs <- data[w>0, .(mean.diff=weighted.mean(get(v)), w=w), by=treat]
-        setkeyv(mean.diffs, c('treat', 'mean.diff'))
-    } else {
-        mean.diffs <- data[, .(mean.diff=mean(get(v))), by=treat]
-    }
-    binary <- all(range(v) == c(0,1))
-    if (!binary) {
-        # If continuous variable, standardize mean difference
-        if (wtd) {
-            mean.diffs$mean.diff <- mean.diffs$mean.diff/sqrt(sum(data[, sqrt(wtd.var(get(v), w=w)), by=treat][,2]))
-        } else {
-            mean.diffs$mean.diff <- mean.diffs$mean.diff/sqrt(sum(data[, sd(get(v)), by=treat][,2]))
-        }
-    }
-    return(mean.diffs)
-}
-
 mean_diff <- function(x, data, matched=FALSE) {
     treat <- data[treat==1, get(x)]
     if (matched) {
         ctrl <- data[treat==0 & w>0, get(x)]
-        wts <- data[treat==0 & w>0, get(x)]
+        wts <- data[treat==0 & w>0, w]
     } else {
         ctrl <- data[treat==0, get(x)]
-        wts<- data[treat==0, w]
+        wts <- rep(1, length(ctrl))
     }
 
     mean.treat <- mean(treat)
     mean.ctrl <- weighted.mean(ctrl, wts)
     diff <- mean.treat - mean.ctrl
     
-    # Standardize means for continuous variables
-    if (all(range(data[, get(x)]) == c(0,1))) {
+    # Standardize mean differences for continuous variables
+    if (!all(range(data[, get(x)]) == c(0,1))) {
         sd.treat <- sd(treat)
         sd.ctrl <- sqrt(wtd.var(ctrl, wts))
         
@@ -218,26 +151,56 @@ mean_diff <- function(x, data, matched=FALSE) {
     return(diff)
 }
 
+ratio_sd <- function(x, data, matched=FALSE) {
+    treat <- data[treat==1, get(x)]
+    if (matched) {
+        ctrl <- data[treat==0 & w>0, get(x)]
+        wts <- data[treat==0 & w>0, w]
+    } else {
+        ctrl <- data[treat==0, get(x)]
+        wts <- rep(1, length(ctrl))
+    }
+
+    sd.treat <- sd(treat)
+    sd.ctrl <- sqrt(wtd.var(ctrl, wts))
+    ratio <- sd.ctrl / sd.treat
+    
+    return(ratio)
+}
+
 check_balance <- function(data, X, wts) {
-    # REQUIRES data.table
-    # Create weights in data
+    # Store weights in data
     data[, w:=ifelse(treat==1, 1, wts)]
-    # Keep only weights for comparisons used
-    wts <- wts[wts > 0]
+   
     # 1-2. means in unmatched data
     means.unmatched <- data[, lapply(.SD, mean), by=treat, .SDcols=X]
-    means.unmatched[, matched:=0]
+    means.unmatched[, `:=`(matched=0, Estimate='Mean')]
+   
     # 3-4. means in matched data
-    means.matched <- data[w>0, lapply(.SD, weighted.mean, w=w, by=treat, .SDcols=X]
-    means.matched[, matched:=1]
+    means.matched <- data[w>0, lapply(.SD, weighted.mean, w=w), by=treat, .SDcols=X]
+    means.matched[, `:=`(matched=1, Estimate='Mean')]
+   
     # 5-6. mean differences of confounders
-    #mean.diff.unmatched <- lapply(confounders, mean_diff.old, data=data)
-    #mean.diff.matched <- lapply(confounders, mean_diff.old, data=data[w>0,], wtd=TRUE)
     mean.diffs.unmatched <- sapply(X, mean_diff, data)
+    mean.diffs.unmatched$matched <- 0
     mean.diffs.matched <- sapply(X, mean_diff, data, TRUE)
+    mean.diffs.matched$matched <- 1
+   
     # 7-8. ratio of sd
+    ratio.unmatched <- sapply(X, ratio_sd, data)
+    ratio.unmatched$matched <- 0
+    ratio.matched <- sapply(X, ratio_sd, data, TRUE)
+    ratio.matched$matched <- 1
+   
+    # Store estimates
+    mean.diffs <- data.table(rbind(mean.diffs.unmatched, mean.diffs.matched))
+    mean.diffs[, Estimate:='Mean diff.']
+    ratios <- data.table(rbind(ratio.unmatched, ratio.matched))
+    ratios[, Estimate:='Ratio of stdev']
+    ests <- rbind(means.matched, means.unmatched, mean.diffs, ratios, fill=TRUE)
+    setcolorder(ests, c('Estimate', 'matched', 'treat', X))
 
-    return(rbind(means.unmatched, means.matched))
+    return(ests)
 }
 ```
 
