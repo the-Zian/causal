@@ -4,9 +4,9 @@ subtitle: The role of propensity scores in observational study
 author: Alan Z Chen
 date: "`r format(Sys.time(), '%B %Y')`"
 header-includes:
-    - \usepackage{amsmath}
-output: pdf_document
----
+  - \usepackage{amsmath}
+  output: pdf_document
+  ---
 
 ```{r rmd_setup, include=FALSE}
 knitr::opts_chunk$set(echo=TRUE)
@@ -74,8 +74,8 @@ dt$psc <- ps.m1$fitted.values
 
 - (a) The first thing you need to be clear on before restructuring your data is the estimand. Given the description above about the research question, what is the estimand of interest?  
 - (b) First please perform *one-to-one nearest neighbor matching with replacement* using your estimated propensity score from Question 2. Perform this matching using the `matching` command in the arm package. The *"cnts"* variable in the output reflects the number of times each control observation was used as a match (the length is equal to the number of control observations). Use the output of this function to create a weight variable that  
-    - 1) equals one for treated observations and  
-    - 2) equals the number of times used as a match for non- treated observations.  
+- 1) equals one for treated observations and  
+- 2) equals the number of times used as a match for non- treated observations.  
 
 \texttt{ANSWER:}  
 The IHDP intervention targeted children that were born premature and with low birth weight, thus the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
@@ -94,15 +94,15 @@ wts <- matches$cnts
 ```{r Q4a}
 # Paired, inverted histograms: propensity scores
 examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score', options=NULL){
-  dt_plot = dt[, c('treat',var), with=F]
-  colnames(dt_plot) = c('treat','X')
-  ggplot(dt_plot) +
-      geom_histogram(data=dt_plot[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=..count.., color=col.RdBl.2[2])) +
-      geom_histogram(data=dt_plot[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=-..count.., color=col.RdBl.2[1])) +
-      coord_cartesian(ylim=ylim) +
-      scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-      labs(x=xlab, y='Frequency', title=paste('Overlap of ',var_name,' between Groups',sep='')) +
-      options 
+    dt_plot = dt[, c('treat',var), with=F]
+    colnames(dt_plot) = c('treat','X')
+    ggplot(dt_plot) +
+    geom_histogram(data=dt_plot[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(data=dt_plot[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=-..count.., color=col.RdBl.2[1])) +
+    coord_cartesian(ylim=ylim) +
+    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+    labs(x=xlab, y='Frequency', title=paste('Overlap of ',var_name,' between Groups',sep='')) +
+    options 
 }
 
 examine_overlap(dt, 40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score')
@@ -141,15 +141,21 @@ mean_diff <- function(x, data, matched=FALSE) {
     mean.treat <- mean(treat)
     mean.ctrl <- weighted.mean(ctrl, wts)
     diff <- mean.treat - mean.ctrl
-    
+
     # Standardize mean differences for continuous variables
     if (!all(range(data[, get(x)]) == c(0,1))) {
         sd.treat <- sd(treat)
         sd.ctrl <- sqrt(wtd.var(ctrl, wts))
-        
+
         diff <- diff / sqrt(sd.treat + sd.ctrl)
     }
     return(diff)
+}
+
+sd_binary <- function(x) {
+    n <- length(x)
+    p <- sum(x) / n
+    return(sqrt(n*p*(1-p)))
 }
 
 ratio_sd <- function(x, data, matched=FALSE) {
@@ -165,7 +171,7 @@ ratio_sd <- function(x, data, matched=FALSE) {
     sd.treat <- sd(treat)
     sd.ctrl <- sqrt(wtd.var(ctrl, wts))
     ratio <- sd.ctrl / sd.treat
-    
+
     return(ratio)
 }
 
@@ -173,27 +179,27 @@ check_balance <- function(data, X, wts) {
     # Store weights in data
     data[treat==0, w:=wts]
     data[treat==1, w:=1]
-   
+
     # 1-2. means in unmatched data
     means.unmatched <- data[, lapply(.SD, mean), by=treat, .SDcols=X]
     means.unmatched[, `:=`(matched=0, Estimate='Mean')]
-   
+
     # 3-4. means in matched data
     means.matched <- data[w>0, lapply(.SD, weighted.mean, w=w), by=treat, .SDcols=X]
     means.matched[, `:=`(matched=1, Estimate='Mean')]
-   
+
     # 5-6. mean differences of confounders
     mean.diffs.unmatched <- sapply(X, mean_diff, data)
     mean.diffs.unmatched$matched <- 0
     mean.diffs.matched <- sapply(X, mean_diff, data, TRUE)
     mean.diffs.matched$matched <- 1
-   
+
     # 7-8. ratio of sd
     ratio.unmatched <- sapply(X, ratio_sd, data)
     ratio.unmatched$matched <- 0
     ratio.matched <- sapply(X, ratio_sd, data, TRUE)
     ratio.matched$matched <- 1
-   
+
     # Store estimates
     mean.diffs <- data.table(rbind(mean.diffs.unmatched, mean.diffs.matched))
     mean.diffs[, Estimate:='Mean diff.']
@@ -203,6 +209,10 @@ check_balance <- function(data, X, wts) {
     setcolorder(ests, c('Estimate', 'matched', 'treat', X))
 
     return(ests)
+}
+
+checkBalance <- function(data, cnfdrs, ws) {
+    mn1
 }
 ```
 
@@ -214,6 +224,26 @@ check_balance(dt, confounders, wts)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
+
+\texttt{ANSWER:}
+```{r Q4e}
+# Subset data
+temp <- hw4[bw<3000, .(treat, bw, b.marr)]
+# Fit propensity score model (logistic)
+ps.m2 <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
+# Generate propensities scores
+temp$psc <- ps.m2$fitted.values
+# 1-1 nearest neighbor matching with replacement
+ps.m2.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
+
+temp[treat==0, w:=ps.m2.matches$cnts]
+temp[treat==1, w:=1]
+
+mean(temp[treat==0, bw])
+mean(temp[treat==0 & w==0, bw])
+
+check_balance(temp, c('bw', 'b.marr'), ps.m2.matches$cnts)
+```
 
 
 ## Question 5: Repeat steps 2-4 within the matching framework.
@@ -244,10 +274,10 @@ confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
 
 # Mahalo
 myMH = function(trtnms, ctrnms, inv.cov, data){
-  covars = dimnames(inv.cov)[[1]]
-  xdiffs = as.matrix(data[trtnms,covars])
-  xdiffs = xdiffs - as.matrix(data[ctrnms, covars])
-  rowSums((xdiffs %*% inv.cov) * xdiffs)
+    covars = dimnames(inv.cov)[[1]]
+    xdiffs = as.matrix(data[trtnms,covars])
+    xdiffs = xdiffs - as.matrix(data[ctrnms, covars])
+    rowSums((xdiffs %*% inv.cov) * xdiffs)
 }
 
 dt_mahalo = as.data.frame(dt)
@@ -261,13 +291,13 @@ match_results = as.data.frame(cbind(seq(1,290), matches+290))
 colnames(match_results) = c('trt.idx','ctr.idx')
 
 counts = match_results %>% 
-  group_by(ctr.idx) %>%
-  dplyr::summarize(w_mahalo=n())
+group_by(ctr.idx) %>%
+dplyr::summarize(w_mahalo=n())
 
 dt_mahalo_2 = dt_mahalo %>%
-  mutate(id = as.integer(rownames(dt_mahalo))) %>%
-  left_join(counts, by = c("id" = "ctr.idx")) %>%
-  mutate(w_mahalo = treat + ifelse(is.na(w_mahalo),0,w_mahalo))
+mutate(id = as.integer(rownames(dt_mahalo))) %>%
+left_join(counts, by = c("id" = "ctr.idx")) %>%
+mutate(w_mahalo = treat + ifelse(is.na(w_mahalo),0,w_mahalo))
 
 dt$w_mahalo = dt_mahalo_2$w_mahalo
 
