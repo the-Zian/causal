@@ -28,6 +28,7 @@ library(randomForest)
 library(nnet)
 library(dplyr)
 
+rm(list=ls())
 # Set global ggplot theme
 theme_set(theme_minimal())
 # Define global color palettes
@@ -55,6 +56,7 @@ corr_mat = cor(hw4)
 
 corr_mat = rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
 confounders = names(which(apply(abs(corr_mat) >= 0.3 & abs(corr_mat) != 1, 2, sum) > 0))
+confounders = confounders[confounders != 'st99']
 
 # Subset data for analysis
 dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
@@ -65,7 +67,7 @@ dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
 
 \texttt{ANSWER:}
 ```{r Q2}
-ps.m1 <- glm(treat ~ . - ppvtr.36, data=dt, family=binomial(link='logit'))
+ps.m1 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
 ```
 
@@ -106,8 +108,8 @@ examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score',
 }
 
 examine_overlap(dt, 40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score')
-examine_overlap(dt, 12, var='momed', var_name='Mother\'s Education', ylim=c(-150,450), xlab='Mother\'s Education', options=scale_x_continuous(labels=c('Less than HS', 'High School', 'Less than college', 'College')))
 examine_overlap(dt, 20, var='preterm', var_name='Number Weeks Baby Born Preterm', ylim=c(-100,150), xlab='Weeks Preterm')
+examine_overlap(dt, 20, var='bw', var_name='Birthweight', ylim=c(-50,200), xlab='Birthweight')
 ```
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
@@ -210,10 +212,12 @@ check_balance <- function(data, X, wts) {
 
 \texttt{ANSWER:}
 ```{r Q4d}
-check_balance(dt, confounders, wts)
+df = check_balance(dt, confounders, wts)
+as.matrix(df)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
+
 
 
 ## Question 5: Repeat steps 2-4 within the matching framework.
@@ -241,13 +245,15 @@ dt_nnet$treat = as.factor(dt_nnet$treat)
 nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout = F, maxit=200)
 dt$psc_nn = predict(nn_mod)
 confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
+```
 
+```{r}
 # Mahalo
 myMH = function(trtnms, ctrnms, inv.cov, data){
   covars = dimnames(inv.cov)[[1]]
   xdiffs = as.matrix(data[trtnms,covars])
   xdiffs = xdiffs - as.matrix(data[ctrnms, covars])
-  rowSums((xdiffs %*% inv.cov) * xdiffs)
+  sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
 }
 
 dt_mahalo = as.data.frame(dt)
@@ -256,7 +262,7 @@ trtnms = row.names(dt_mahalo[as.logical(dt_mahalo$treat),])
 ctrnms = row.names(dt_mahalo[!as.logical(dt_mahalo$treat),])
 mahalo_dist = outer(trtnms,ctrnms,FUN = myMH, inv.cov = inv_cov_mat, data = dt_mahalo)
 
-matches = apply(mahalo_dist,1, function(x) which(x == min(x)))
+matches = apply(mahalo_dist,1, function(x) min(which(x == min(x))))
 match_results = as.data.frame(cbind(seq(1,290), matches+290))
 colnames(match_results) = c('trt.idx','ctr.idx')
 
@@ -271,6 +277,16 @@ dt_mahalo_2 = dt_mahalo %>%
 
 dt$w_mahalo = dt_mahalo_2$w_mahalo
 
+# Check against MatchIt function
+library(MatchIt)     
+df = dt[,c('treat',confounders),with=F]
+zz <- matchit(treat ~ momed + booze + bw + bwg + preterm + black + white + dayskidh, data=df, method="nearest", 
+              distance="mahalanobis", replace=TRUE)
+zz.out = zz$match.matrix
+sum(match_results$ctr.idx == zz.out)
+```
+
+```{r}
 # Rematching
 matches <- matching(z=dt$treat, score=dt$psc_probit, replace=TRUE)
 dt[treat==1, w_probit:=1]
@@ -346,17 +362,52 @@ r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
 iptw.balance <- check_balance(dt, confounders, r_att)
 ```
 
-## Question 7: Comparative balance table
-Create a table with columns 6 and 8 from your function for each of the matching and weighting methods performed above. Which approach would you choose and why? (1-2 paragraphs at most)
+### Question 7: Comparative balance table Create a table with columns 6 and 8 from your function for each of the matching and weighting methods performed above. Which approach would you choose and why? (1-2 paragraphs at most)
+
+### Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5) 
+
+Estimate the effect of the treatment on the treated for each of your five approaches by fitting a regression with weights equal to the number of times each observation appears in the matched sample (that is, use your weights variable from above) or using IPTW weights. Report the treatment effect and standard error for each approach.
 
 
-## Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5)
+
+```{r}
+dt[treat==0, w:=wts]
+dt[treat==1, w:=1]
+df = dt[,c('ppvtr.36','treat',confounders),with=F]
+
+mod1 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w))$coefficients
+mod1.out = c(mod1[2,1],mod1[2,2])
+
+mod2 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_probit))$coefficients
+mod2.out = c(mod2[2,1],mod2[2,2])
+
+mod3 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_full))$coefficients
+mod3.out = c(mod3[2,1],mod3[2,2])
+
+mod4 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_mahalo))$coefficients
+mod4.out = c(mod4[2,1],mod4[2,2])
+
+mod5 = summary(lm(ppvtr.36 ~ ., data = df, weights = r_att))$coefficients
+mod5.out = c(mod5[2,1],mod5[2,2])
+
+q8_results = rbind(mod1.out,mod2.out,mod3.out,mod4.out,mod5.out)
+row.names(q8_results) = c('logit','probit','full probit','mahalo','IPTW')
+colnames(q8_results) = c('coef','se')
+q8_results
+
+plot(dt$w_probit)
+plot(dt$w)
+plot(dt$w_full)
+plot(dt$w_mahalo)
+```
 
 
-## Question 9: Assumptions
+### Question 9: Assumptions What assumptions are necessary to interpret the estimates from the propensity score approaches causally? List and describe briefly.
 
+### Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
 
-## Question 10: Causal Interpretation
+### Question 11: Comparison to linear regression Fit a regression of your outcomes to the treatment indicator and covariates.
 
+(a) Report your estimate and standard error.
 
-## Question 11: Comparison to linear regression
+(b) Interpret your results non-causally. (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
