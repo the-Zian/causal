@@ -143,9 +143,9 @@ wtdVar <- function(x, wts) {
     # Calculate weighted sample variance
     if (isBinary(x)) {
         sum(wts * (x - wtdMean(x, wts))^2) / (sum(wts) - 1)
-        sum(wts^2 * mean(x) * (1 - mean(x))) / sum(wts)
+        return( sum(wts^2 * mean(x) * (1 - mean(x))) / sum(wts) )
     } else {
-        sum(wts * (x - wtdMean(x, wts))^2) / (sum(w) - 1)
+        return( sum(wts * (x - wtdMean(x, wts))^2) / (sum(w) - 1) )
     }
 }
 
@@ -155,25 +155,26 @@ meanDiff <- function(x, data, wtd=FALSE) {
     treated <- data[treat==1, get(x)]
     control <- data[treat==0, get(x)]
 
-    if (wtd) {
-        wts <- data[treat==0, w]
-    } else {
-        wts <- rep(1, length(control))
-    }
-
     x1 <- mean(treated)
-    x0 <- wtdMean(control, wts)
-
     if (isBinary(data[, get(x)])) {
-        x1 - x0
+        if (wtd) {
+            wts <- data[treat==0, w]
+            x0 <- wtdMean(control, wts)
+        } else {
+            x0 <- mean(control)
+        }
+        return(x1 - x0)
     } else {
         var1 <- var(treated)
-        if (length(wts) == 1) {
+        if (wtd) {
+            wts <- data[treat==0, w]
+            x0 <- wtdMean(control, wts)
             var0 <- wtdVar(control, wts)
         } else {
+            x0 <- mean(control)
             var0 <- var(control)
         }
-        (x1 - x0) / sqrt((var1 + var0) / 2)
+        return( (x1 - x0) / sqrt((var1 + var0) / 2) )
     }
 }
 
@@ -188,7 +189,7 @@ ratioSD <- function(x, data, wtd=FALSE) {
         if (x.binary) {
             var1 <- mean(treated) * (1 - mean(treated))
             # var0 <- mean(control) * (1 - mean(control))
-            var0 <- wtdVar(control)
+            var0 <- wtdVar(control, wts)
         } else {
             var1 <- var(treated)
             var0 <- wtdVar(control, wts)
@@ -202,7 +203,7 @@ ratioSD <- function(x, data, wtd=FALSE) {
             var0 <- var(control)
         }
     }
-    sqrt(var0) / sqrt(var1)
+    return( sqrt(var0) / sqrt(var1) )
 }
 
 checkBalance <- function(data, X, wts) {
@@ -228,7 +229,7 @@ checkBalance <- function(data, X, wts) {
     ratio.m <- melt(sapply(X, ratioSD, data=data[w>0,], wtd=TRUE), value.name='ratio.m')
 
     # Return estimates
-    ests <- data.frame(mn1, mn0, mn1.m, mn0.m, diff, diff.m, ratio, ratio.m)
+    return( data.frame(mn1, mn0, mn1.m, mn0.m, diff, diff.m, ratio, ratio.m) )
 }
 ```
 
@@ -251,12 +252,6 @@ ps.m2 <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
 temp$psc <- ps.m2$fitted.values
 # 1-1 nearest neighbor matching with replacement
 ps.m2.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
-
-temp[treat==0, w:=ps.m2.matches$cnts]
-temp[treat==1, w:=1]
-
-mean(temp[treat==0, bw])
-mean(temp[treat==0 & w==0, bw])
 
 checkBalance(temp, c('bw', 'b.marr'), ps.m2.matches$cnts)
 ```
