@@ -26,6 +26,7 @@ library(caret)
 library(randomForest)
 library(nnet)
 library(dplyr)
+library(MatchIt)
 
 rm(list=ls())
 # Set global ggplot theme
@@ -261,21 +262,25 @@ checkBalance(temp, c('bw', 'b.marr'), ps.m2.matches$cnts)
 ## Question 5: Repeat steps 2-4 within the matching framework.
 
 \texttt{ANSWER:}
-```{r Q5}
+```{r Q5.i}
+# Model 2: Probit
 ps.m2 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
 summary(ps.m2)
 dt$psc_probit <- ps.m2$fitted.values
 confusionMatrix(ifelse(dt$psc_probit>0.5,1,0), dt$treat)
 
+# Model 3: Probit with interactions
 ps.m3 <- glm(treat ~ .^2, data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
 summary(ps.m3)
 dt$psc_full <- ps.m3$fitted.values
 confusionMatrix(ifelse(dt$psc_full>0.5,1,0), dt$treat)
 
+# Model 4: Random Forest
 m.rf = randomForest(as.factor(treat) ~ ., data=dt[,c('treat',confounders),with=F], ntree = 10)
 dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
 confusionMatrix(ifelse(dt$psc_rf>0.5,1,0), dt$treat)
 
+# Model 5: Neural Net
 dt_nnet = as.data.frame(dt[,c('treat',confounders),with=F])
 dt_nnet[,which(sapply(dt_nnet,class)=="numeric")] = scale(dt_nnet[,which(sapply(dt_nnet,class)=="numeric")])
 dt_nnet$treat = as.factor(dt_nnet$treat)
@@ -285,8 +290,8 @@ dt$psc_nn = predict(nn_mod)
 confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
 ```
 
-```{r}
-# Mahalo
+```{r Q5.ii}
+# Mahalanobis Distance
 myMH = function(trtnms, ctrnms, inv.cov, data){
   covars = dimnames(inv.cov)[[1]]
   xdiffs = as.matrix(data[trtnms,covars])
@@ -315,8 +320,7 @@ mutate(w_mahalo = treat + ifelse(is.na(w_mahalo),0,w_mahalo))
 
 dt$w_mahalo = dt_mahalo_2$w_mahalo
 
-# Check against MatchIt function
-library(MatchIt)     
+# Check against MatchIt function  
 df = dt[,c('treat',confounders),with=F]
 zz <- matchit(treat ~ momed + booze + bw + bwg + preterm + black + white + dayskidh, data=df, method="nearest", 
               distance="mahalanobis", replace=TRUE)
@@ -324,7 +328,7 @@ zz.out = zz$match.matrix
 sum(match_results$ctr.idx == zz.out)
 ```
 
-```{r}
+```{r Q5.iii}
 # Rematching
 matches <- matching(z=dt$treat, score=dt$psc_probit, replace=TRUE)
 dt[treat==1, w_probit:=1]
@@ -385,30 +389,34 @@ ctrl = dt$treat==0
 
 For estimating the ATE, define the weight as follows:
 $$\omega(Z,x) = \frac{Z}{\hat{\epsilon}(x)} + \frac{(1-Z)}{1-\hat{\epsilon(x)}}$$
-```{r}
+```{r Q6.i}
 r_ate = dt$treat/dt$psc + (1-dt$treat)/(1-dt$psc)
 ```
 
 
 For estimating the ATT, define the weight as follows:
 $$\omega(Z,x) = Z + (1-Z) * \frac{\hat{\epsilon}(x)}{1-\hat{\epsilon}(x)}$$
-```{r}
+```{r Q6.ii}
 r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
 ```
 
-```{r}
+```{r Q6.iii}
 iptw.balance <- check_balance(dt, confounders, r_att)
 ```
 
+
 ### Question 7: Comparative balance table Create a table with columns 6 and 8 from your function for each of the matching and weighting methods performed above. Which approach would you choose and why? (1-2 paragraphs at most)
+
+\texttt{ANSWER:}  
+
+
 
 ### Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5) 
 
 Estimate the effect of the treatment on the treated for each of your five approaches by fitting a regression with weights equal to the number of times each observation appears in the matched sample (that is, use your weights variable from above) or using IPTW weights. Report the treatment effect and standard error for each approach.
 
-
-
-```{r}
+\texttt{ANSWER:}
+```{r Q8}
 dt[treat==0, w:=wts]
 dt[treat==1, w:=1]
 df = dt[,c('ppvtr.36','treat',confounders),with=F]
@@ -442,10 +450,27 @@ plot(dt$w_mahalo)
 
 ### Question 9: Assumptions What assumptions are necessary to interpret the estimates from the propensity score approaches causally? List and describe briefly.
 
+\texttt{ANSWER:}  
+
+
+
 ### Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
+
+\texttt{ANSWER:}  
+
+
 
 ### Question 11: Comparison to linear regression Fit a regression of your outcomes to the treatment indicator and covariates.
 
-(a) Report your estimate and standard error.
+#### (a) Report your estimate and standard error.
 
-(b) Interpret your results non-causally. (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
+\texttt{ANSWER:}
+```{r Q11.a}
+
+```
+
+#### (b) Interpret your results non-causally. (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
+
+\texttt{ANSWER:}  
+
+
