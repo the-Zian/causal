@@ -129,91 +129,103 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 \texttt{ANSWER:}
 ```{r Q4c}
-mean_diff <- function(x, data, matched=FALSE) {
-    treat <- data[treat==1, get(x)]
-    if (matched) {
-        ctrl <- data[treat==0 & w>0, get(x)]
-        wts <- data[treat==0 & w>0, w]
+isBinary <- function(x) {
+    # Check if x is binary
+    all(x %in% c(0,1))
+}
+
+wtdMean <- function(x, wts) {
+    # Calculate weighted mean of x
+    sum(wts * x) / sum(wts)
+}
+
+wtdVar <- function(x, wts) {
+    # Calculate weighted sample variance
+    if (isBinary(x)) {
+        sum(wts^2 * mean(x) * (1 - mean(x))) / sum(wts)
     } else {
-        ctrl <- data[treat==0, get(x)]
-        wts <- rep(1, length(ctrl))
+        sum(wts * (x - wtdMean(x, wts))^2) / (sum(w) - 1)
     }
-
-    mean.treat <- mean(treat)
-    mean.ctrl <- weighted.mean(ctrl, wts)
-    diff <- mean.treat - mean.ctrl
-
-    # Standardize mean differences for continuous variables
-    if (!all(range(data[, get(x)]) == c(0,1))) {
-        sd.treat <- sd(treat)
-        sd.ctrl <- sqrt(wtd.var(ctrl, wts))
-
-        diff <- diff / sqrt(sd.treat + sd.ctrl)
-    }
-    return(diff)
 }
 
-sd_binary <- function(x) {
-    n <- length(x)
-    p <- sum(x) / n
-    return(sqrt(n*p*(1-p)))
-}
+meanDiff <- function(x, data, wtd=FALSE) {
+    # Calculate mean difference of x between treated and controls
+    # Standardized mean difference for continuous variables
+    treated <- data[treat==1, get(x)]
+    control <- data[treat==0, get(x)]
 
-ratio_sd <- function(x, data, matched=FALSE) {
-    treat <- data[treat==1, get(x)]
-    if (matched) {
-        ctrl <- data[treat==0 & w>0, get(x)]
-        wts <- data[treat==0 & w>0, w]
+    if (wtd) {
+        wts <- data[treat==0, w]
     } else {
-        ctrl <- data[treat==0, get(x)]
-        wts <- rep(1, length(ctrl))
+        wts <- rep(1, length(control))
     }
 
-    sd.treat <- sd(treat)
-    sd.ctrl <- sqrt(wtd.var(ctrl, wts))
-    ratio <- sd.ctrl / sd.treat
+    x1 <- mean(treated)
+    x0 <- wtdMean(control, wts)
 
-    return(ratio)
+    if (isBinary(data[, get(x)])) {
+        x1 - x0
+    } else {
+        var1 <- var(treated)
+        if (length(wts) == 1) {
+            var0 <- wtdVar(control, wts)
+        } else {
+            var0 <- var(control)
+        }
+        (x1 - x0) / sqrt((var1 + var0) / 2)
+    }
 }
 
-check_balance <- function(data, X, wts) {
-    # Store weights in data
+
+ratioSD <- function(x, data, wtd=FALSE) {
+    # Calculate ratio (control/treated) of standard deviations
+    treated <- data[treat==1, get(x)]
+    control <- data[treat==0, get(x)]
+    x.binary <- isBinary(data[, get(x)])
+
+    if (wtd) {
+        wts <- data[treat==0, w]
+        if (x.binary) {
+            var1 <- mean(treated) * (1 - mean(treated))
+            # var0 <- mean(control) * (1 - mean(control))
+            var0 <- wtd.var(control, wts)
+        } else {
+            var1 <- var(treated)
+            var0 <- wtdVar(control, wts)
+        }
+    } else {
+        if (x.binary) {
+            var1 <- mean(treated) * (1 - mean(treated))
+            var0 <- mean(control) * (1 - mean(control))
+        } else {
+            var1 <- var(treated)
+            var0 <- var(control)
+        }
+    }
+    sqrt(var0) / sqrt(var1)
+}
+
+checkBalance <- function(data, X, wts) {
+    # set weights
     data[treat==0, w:=wts]
     data[treat==1, w:=1]
 
-    # 1-2. means in unmatched data
-    means.unmatched <- data[, lapply(.SD, mean), by=treat, .SDcols=X]
-    means.unmatched[, `:=`(matched=0, Estimate='Mean')]
-
-    # 3-4. means in matched data
-    means.matched <- data[w>0, lapply(.SD, weighted.mean, w=w), by=treat, .SDcols=X]
-    means.matched[, `:=`(matched=1, Estimate='Mean')]
-
-    # 5-6. mean differences of confounders
-    mean.diffs.unmatched <- sapply(X, mean_diff, data)
-    mean.diffs.unmatched$matched <- 0
-    mean.diffs.matched <- sapply(X, mean_diff, data, TRUE)
-    mean.diffs.matched$matched <- 1
-
-    # 7-8. ratio of sd
-    ratio.unmatched <- sapply(X, ratio_sd, data)
-    ratio.unmatched$matched <- 0
-    ratio.matched <- sapply(X, ratio_sd, data, TRUE)
-    ratio.matched$matched <- 1
-
-    # Store estimates
-    mean.diffs <- data.table(rbind(mean.diffs.unmatched, mean.diffs.matched))
-    mean.diffs[, Estimate:='Mean diff.']
-    ratios <- data.table(rbind(ratio.unmatched, ratio.matched))
-    ratios[, Estimate:='Ratio of stdev']
-    ests <- rbind(means.matched, means.unmatched, mean.diffs, ratios, fill=TRUE)
-    setcolorder(ests, c('Estimate', 'matched', 'treat', X))
-
-    return(ests)
-}
-
-checkBalance <- function(data, cnfdrs, ws) {
-    mn1
+    # 1. Means in unmatched treatment group
+    mn1 <- melt(data[treat==1, sapply(.SD, mean), .SDcols=X], value.name='mn1')
+    # 2. Means in unmatched control group
+    mn0 <- melt(data[treat==0, sapply(.SD, mean), .SDcols=X], value.name='mn0')
+    # 3. Means in matched treatment group
+    mn1.m <- melt(data[treat==1 & w>0, sapply(.SD, mean), .SDcols=X], value.name='mn1.m')
+    # 4 Means in matched control group
+    mn0.m <- melt(data[treat==0 & w>0, sapply(.SD, wtdMean, wts=w), .SDcols=X], value.name='mn0.m')
+    # 5. Mean difference in unmatched sample
+    diff <- melt(sapply(X, meanDiff, data=data))
+    # 6. Mean difference in matched sample
+    diff.m <- melt(sapply(X, meanDiff, data=data[w>0,], wtd=TRUE))
+    # 7. Ratio of standard deviation in unmatched sample (control/treated)
+    ratio <- melt(sapply(X, ratioSD, data=data), value.name='ratio')
+    # 8. Ratio of standard deviation in matched sample (control/treated)
+    ratio.m <- melt(sapply(X, ratioSD, data=data[w>0,], wtd=TRUE), value.name='ratio.m')
 }
 ```
 
