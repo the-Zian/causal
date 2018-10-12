@@ -6,9 +6,9 @@ author:
     - Chansoo Song
 date: "`r format(Sys.time(), '%B %Y')`"
 header-includes:
-  - \usepackage{amsmath}
-  output: pdf_document
-  ---
+    - \usepackage{amsmath}
+output: pdf_document
+---
 
 ```{r rmd_setup, include=FALSE}
 knitr::opts_chunk$set(echo=TRUE)
@@ -24,7 +24,6 @@ library(ggplot2)
 library(rlang)
 library(RColorBrewer)
 library(stats)
-library(Hmisc)
 library(caret)
 library(randomForest)
 library(nnet)
