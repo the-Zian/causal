@@ -1,7 +1,7 @@
 ---
 title: Causal Inference Homework Assignment 4
 subtitle: The role of propensity scores in observational study
-author: Alan Z Chen
+author: Alan Z Chen, Chansoo Song
 date: "`r format(Sys.time(), '%B %Y')`"
 header-includes:
     - \usepackage{amsmath}
