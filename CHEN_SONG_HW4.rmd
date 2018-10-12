@@ -142,6 +142,7 @@ wtdMean <- function(x, wts) {
 wtdVar <- function(x, wts) {
     # Calculate weighted sample variance
     if (isBinary(x)) {
+        sum(wts * (x - wtdMean(x, wts))^2) / (sum(wts) - 1)
         sum(wts^2 * mean(x) * (1 - mean(x))) / sum(wts)
     } else {
         sum(wts * (x - wtdMean(x, wts))^2) / (sum(w) - 1)
@@ -187,7 +188,7 @@ ratioSD <- function(x, data, wtd=FALSE) {
         if (x.binary) {
             var1 <- mean(treated) * (1 - mean(treated))
             # var0 <- mean(control) * (1 - mean(control))
-            var0 <- wtd.var(control, wts)
+            var0 <- wtdVar(control)
         } else {
             var1 <- var(treated)
             var0 <- wtdVar(control, wts)
@@ -218,9 +219,9 @@ checkBalance <- function(data, X, wts) {
     # 4 Means in matched control group
     mn0.m <- melt(data[treat==0 & w>0, sapply(.SD, wtdMean, wts=w), .SDcols=X], value.name='mn0.m')
     # 5. Mean difference in unmatched sample
-    diff <- melt(sapply(X, meanDiff, data=data))
+    diff <- melt(sapply(X, meanDiff, data=data), value.name='diff')
     # 6. Mean difference in matched sample
-    diff.m <- melt(sapply(X, meanDiff, data=data[w>0,], wtd=TRUE))
+    diff.m <- melt(sapply(X, meanDiff, data=data[w>0,], wtd=TRUE), value.name='diff.m')
     # 7. Ratio of standard deviation in unmatched sample (control/treated)
     ratio <- melt(sapply(X, ratioSD, data=data), value.name='ratio')
     # 8. Ratio of standard deviation in matched sample (control/treated)
