@@ -240,7 +240,7 @@ checkBalance <- function(data, X, wts) {
 
 \texttt{ANSWER:}
 ```{r Q4d}
-df <- checkBalance(.data=dt, X=confounders, wts=wts)
+df <- checkBalance(data=dt, X=confounders, wts=wts)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
