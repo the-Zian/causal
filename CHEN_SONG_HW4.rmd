@@ -54,7 +54,7 @@ corr_mat <- cor(hw4)
 
 corr_mat <- rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
 
-confounders <- names(which((abs(corr_mat[1,]) > 0.05) * (abs(corr_mat[2,]) > 0.05) > 0))
+confounders <- names(which((abs(corr_mat[1,]) > 0.3) + (abs(corr_mat[2,]) > 0.3) > 0))
 confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
 
 # Subset data for analysis
@@ -132,17 +132,18 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 \texttt{ANSWER:}
 ```{r Q4c}
+
 checkBalance = function(df, confounders, wts){
 
   df2 <- df[, confounders]
 
   binary = apply(df2,2,function(x) { all(x %in% 0:1) }) # Binary Variable Indicator
-  trt = df$treat == 1    # Treatment Indicator
-  ctr = df$treat == 0    # Control Indicator
-  n_trt = sum(trt)       # Treatment Sample Size
-  n_ctrl = sum(ctr)      # Control Sample Size
-  wts.trt = rep(1,n_trt) # Set treatment weights
-  wts.ctr = wts          # Set control weights
+  trt = df$treat == 1                   # Treatment Indicator
+  ctr = df$treat == 0                   # Control Indicator
+  n_trt = sum(trt)                      # Treatment Sample Size
+  n_ctrl = sum(ctr)                     # Control Sample Size
+  wts.trt = wts[1:n_trt]                # Set treatment weights
+  wts.ctr = wts[(n_trt+1):length(wts)]  # Set control weights
   
   # Means
   trt.means = apply(df2[trt,],2,mean)
@@ -181,7 +182,8 @@ checkBalance = function(df, confounders, wts){
 
 \texttt{ANSWER:}
 ```{r Q4d}
-checkBalance(df=dt, confounders=confounders, wts=wts)
+wts2 = c(rep(1,290),wts)
+checkBalance(df=dt, confounders=confounders, wts=wts2)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
@@ -197,7 +199,7 @@ temp$psc <- ps.m2$fitted.values
 # 1-1 nearest neighbor matching with replacement
 ps.m2.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
 
-checkBalance(temp, c('bw', 'b.marr'), ps.m2.matches$cnts)
+checkBalance(temp, c('bw', 'b.marr'), c(rep(1,290),ps.m2.matches$cnts))
 ```
 
 
@@ -224,12 +226,12 @@ dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
 confusionMatrix(ifelse(dt$psc_rf>0.5,1,0), dt$treat)
 
 # Model 5: Neural Net
-dt_nnet = as.data.frame(dt[, c('treat',confounders))
+dt_nnet = as.data.frame(dt[, c('treat',confounders)])
 dt_nnet[,which(sapply(dt_nnet,class)=="numeric")] = scale(dt_nnet[,which(sapply(dt_nnet,class)=="numeric")])
 dt_nnet$treat = as.factor(dt_nnet$treat)
 
 nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout = F, maxit=200)
-dt$psc_nn = predict(nn_mod)
+dt$psc_nn = as.numeric(predict(nn_mod))
 confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
 ```
 
@@ -345,6 +347,7 @@ r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
 
 ```{r Q6.iii}
 iptw.balance <- checkBalance(dt, confounders, r_att)
+iptw.balance
 ```
 
 
@@ -362,7 +365,7 @@ Estimate the effect of the treatment on the treated for each of your five approa
 ```{r Q8}
 dt[dt$treat==0, 'w'] <- wts
 dt[dt$treat==1, 'w'] <- 1
-df = dt[,c('ppvtr.36','treat',confounders),with=F]
+df = dt[,c('ppvtr.36','treat',confounders)]
 
 mod1 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w))$coefficients
 mod1.out = c(mod1[2,1],mod1[2,2])
