@@ -51,8 +51,6 @@ In this assignment will use data from a constructed observational study. The dat
 load('data/hw4.rdata')
 hw4 <- data.table(hw4)
 
-###### SUBSET BIRTHWEIGHT FIRST THEN DETERMINE CONFOUNDERS 
-
 # Pick confounders based on correlation to treatment and outcome variables
 corr_mat = cor(hw4)
 
