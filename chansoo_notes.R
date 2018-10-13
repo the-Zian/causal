@@ -13,8 +13,6 @@ wts <- matches$cnts
 
 #########################
 
-df2 = df[,confounders]
-
 examine_balance = function(df2,wts){
   
   binary = apply(df2,2,function(x) { all(x %in% 0:1) }) # Binary Variable Indicator
