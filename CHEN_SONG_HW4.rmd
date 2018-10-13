@@ -51,12 +51,15 @@ In this assignment will use data from a constructed observational study. The dat
 load('data/hw4.rdata')
 hw4 <- data.table(hw4)
 
+###### SUBSET BIRTHWEIGHT FIRST THEN DETERMINE CONFOUNDERS 
+
 # Pick confounders based on correlation to treatment and outcome variables
 corr_mat = cor(hw4)
 
 corr_mat = rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
-confounders = names(which(apply(abs(corr_mat) >= 0.3 & abs(corr_mat) != 1, 2, sum) > 0))
-confounders = confounders[confounders != 'st99']
+
+confounders = names(which((abs(corr_mat[1,]) > 0.05) * (abs(corr_mat[2,]) > 0.05)>0))
+# confounders = confounders[confounders != 'st99']
 
 # Subset data for analysis
 dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
@@ -69,6 +72,7 @@ dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
 ```{r Q2}
 ps.m1 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
+plot(dt$psc)
 ```
 
 
@@ -238,7 +242,7 @@ checkBalance <- function(data, X, wts) {
 
 \texttt{ANSWER:}
 ```{r Q4d}
-df <- checkBalnce(dt, confounders, wts)
+df <- checkBalance(dt, confounders, wts)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
