@@ -135,6 +135,7 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 checkBalance = function(df, confounders, wts){
 
+  # Subset data to confounders only
   df2 <- df[, confounders]
 
   binary = apply(df2,2,function(x) { all(x %in% 0:1) }) # Binary Variable Indicator
@@ -412,11 +413,16 @@ plot(dt$w_mahalo)
 
 \texttt{ANSWER:}
 ```{r Q11.a}
-
+lm1 <- lm(ppvtr.36 ~ ., data=dt[, c(confounders, 'ppvtr.36', 'treat')])
+round(summary(lm1)$coefficients['treat', c('Estimate', 'Std. Error'), drop=FALSE], 2)
 ```
 
-#### (b) Interpret your results non-causally. (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
+#### (b) Interpret your results non-causally
 
 \texttt{ANSWER:}  
 
+
+#### (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
+
+\texttt{ANSWER:}  
 
