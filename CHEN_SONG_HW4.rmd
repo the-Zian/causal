@@ -16,7 +16,7 @@ knitr::opts_knit$set(root.dir='..')
 ```
 
 ```{r rmd, message=FALSE}
-library(data.table)
+library(.data.table)
 library(arm)
 library(ggplot2)
 library(rlang)
@@ -41,15 +41,15 @@ This assignment will give you the opportunity to practice several different prop
 
 
 # Problem Statement  
-In this assignment will use data from a constructed observational study. The data and an associated data dictionary are available in this folder. The treatment group for the study that the data are drawn from is the group of children who participated in the IHDP intervention discussed in class. The research question of interest focuses on the effect of the IHDP intervention on age 3 IQ scores for the children that participated in it. The data for the comparison sample of children was pulled from the National Longitudinal Study of Youth during a similar period of time that the data were collected for the IHDP study.
+In this assignment will use .data from a constructed observational study. The .data and an associated .data dictionary are available in this folder. The treatment group for the study that the .data are drawn from is the group of children who participated in the IHDP intervention discussed in class. The research question of interest focuses on the effect of the IHDP intervention on age 3 IQ scores for the children that participated in it. The .data for the comparison sample of children was pulled from the National Longitudinal Study of Youth during a similar period of time that the .data were collected for the IHDP study.
 
 
-## Question 1: Load the data and choose confounders (Step 1)
+## Question 1: Load the .data and choose confounders (Step 1)
 
 \texttt{ANSWER:}
 ```{r Q1}
-load('data/hw4.rdata')
-hw4 <- data.table(hw4)
+load('.data/hw4.r.data')
+hw4 <- .data.table(hw4)
 
 # Pick confounders based on correlation to treatment and outcome variables
 corr_mat = cor(hw4)
@@ -58,7 +58,7 @@ corr_mat = rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
 confounders = names(which(apply(abs(corr_mat) >= 0.3 & abs(corr_mat) != 1, 2, sum) > 0))
 confounders = confounders[confounders != 'st99']
 
-# Subset data for analysis
+# Subset .data for analysis
 dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
 ```
 
@@ -67,14 +67,14 @@ dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
 
 \texttt{ANSWER:}
 ```{r Q2}
-ps.m1 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
+ps.m1 <- glm(treat ~ ., .data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
 ```
 
 
-## Question 3: Restructure your data through matching. [Or at least create the weights variable that will let you to do so in the following steps] (Step 3)
+## Question 3: Restructure your .data through matching. [Or at least create the weights variable that will let you to do so in the following steps] (Step 3)
 
-- (a) The first thing you need to be clear on before restructuring your data is the estimand. Given the description above about the research question, what is the estimand of interest?  
+- (a) The first thing you need to be clear on before restructuring your .data is the estimand. Given the description above about the research question, what is the estimand of interest?  
 - (b) First please perform *one-to-one nearest neighbor matching with replacement* using your estimated propensity score from Question 2. Perform this matching using the `matching` command in the arm package. The *"cnts"* variable in the output reflects the number of times each control observation was used as a match (the length is equal to the number of control observations). Use the output of this function to create a weight variable that  
 - 1) equals one for treated observations and  
 - 2) equals the number of times used as a match for non- treated observations.  
@@ -90,7 +90,7 @@ wts <- matches$cnts
 
 ## Question 4: Check overlap and balance. (Step 4)
 
-### (a) Examining Overlap. Check overlap on the *unmatched* data using some diagnostic plots. Check overlap for the propensity scores as well as two other covariates.
+### (a) Examining Overlap. Check overlap on the *unmatched* .data using some diagnostic plots. Check overlap for the propensity scores as well as two other covariates.
 
 \texttt{ANSWER:}
 ```{r Q4a}
@@ -99,8 +99,8 @@ examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score',
     dt_plot = dt[, c('treat',var), with=F]
     colnames(dt_plot) = c('treat','X')
     ggplot(dt_plot) +
-    geom_histogram(data=dt_plot[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt_plot[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=-..count.., color=col.RdBl.2[1])) +
+    geom_histogram(.data=dt_plot[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=..count.., color=col.RdBl.2[2])) +
+    geom_histogram(.data=dt_plot[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=-..count.., color=col.RdBl.2[1])) +
     coord_cartesian(ylim=ylim) +
     scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
     labs(x=xlab, y='Frequency', title=paste('Overlap of ',var_name,' between Groups',sep='')) +
@@ -117,7 +117,7 @@ examine_overlap(dt, 20, var='bw', var_name='Birthweight', ylim=c(-50,200), xlab=
 \texttt{ANSWER:}  
 Since our estimand of interest is the \texttt{ATT}, we need similar observations from the control group to use as our counterfactuals for the treatment group. The plots above show sufficient overlap (relative to the treated) between the two groups in propensity scores, mother's education level, and number of weeks the baby was born preterm. There is overlap in mother's age at birth from approximately around age values 25-35, but there are no counterfactual observations for the treated children with mothers that are either younger or older than that 25-35 age range.
 
-### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
+### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the .data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
 
 - 1) Mean in the unmatched treatment group  
 - 2) Mean in the unmatched control group  
@@ -146,7 +146,7 @@ wtdVar <- function(x, wts) {
         sum(wts * (x - wtdMean(x, wts))^2) / (sum(wts) - 1)
         return( sum(wts^2 * mean(x) * (1 - mean(x))) / sum(wts) )
     } else {
-        return( sum(wts * (x - wtdMean(x, wts))^2) / (sum(w) - 1) )
+        return( sum(wts * (x - wtdMean(x, wts))^2) / (sum(wts) - 1) )
     }
 }
 
@@ -238,17 +238,17 @@ checkBalance <- function(data, X, wts) {
 
 \texttt{ANSWER:}
 ```{r Q4d}
-df <- checkBalnce(dt, confounders, wts)
+df <- checkBalance(.data=dt, X=confounders, wts=wts)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
 
 \texttt{ANSWER:}
 ```{r Q4e}
-# Subset data
+# Subset .data
 temp <- hw4[bw<3000, .(treat, bw, b.marr)]
 # Fit propensity score model (logistic)
-ps.m2 <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
+ps.m2 <- glm(treat ~ bw + b.marr, .data=temp, family=binomial(link='logit'))
 # Generate propensities scores
 temp$psc <- ps.m2$fitted.values
 # 1-1 nearest neighbor matching with replacement
@@ -264,49 +264,49 @@ checkBalance(temp, c('bw', 'b.marr'), ps.m2.matches$cnts)
 \texttt{ANSWER:}
 ```{r Q5.i}
 # Model 2: Probit
-ps.m2 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
+ps.m2 <- glm(treat ~ ., .data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
 summary(ps.m2)
 dt$psc_probit <- ps.m2$fitted.values
 confusionMatrix(ifelse(dt$psc_probit>0.5,1,0), dt$treat)
 
 # Model 3: Probit with interactions
-ps.m3 <- glm(treat ~ .^2, data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
+ps.m3 <- glm(treat ~ .^2, .data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
 summary(ps.m3)
 dt$psc_full <- ps.m3$fitted.values
 confusionMatrix(ifelse(dt$psc_full>0.5,1,0), dt$treat)
 
 # Model 4: Random Forest
-m.rf = randomForest(as.factor(treat) ~ ., data=dt[,c('treat',confounders),with=F], ntree = 10)
+m.rf = randomForest(as.factor(treat) ~ ., .data=dt[,c('treat',confounders),with=F], ntree = 10)
 dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
 confusionMatrix(ifelse(dt$psc_rf>0.5,1,0), dt$treat)
 
 # Model 5: Neural Net
-dt_nnet = as.data.frame(dt[,c('treat',confounders),with=F])
+dt_nnet = as..data.frame(dt[,c('treat',confounders),with=F])
 dt_nnet[,which(sapply(dt_nnet,class)=="numeric")] = scale(dt_nnet[,which(sapply(dt_nnet,class)=="numeric")])
 dt_nnet$treat = as.factor(dt_nnet$treat)
 
-nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout = F, maxit=200)
+nn_mod = nnet(treat ~ ., .data=dt_nnet, size=8, linout = F, maxit=200)
 dt$psc_nn = predict(nn_mod)
 confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
 ```
 
 ```{r Q5.ii}
 # Mahalanobis Distance
-myMH = function(trtnms, ctrnms, inv.cov, data){
+myMH = function(trtnms, ctrnms, inv.cov, .data){
   covars = dimnames(inv.cov)[[1]]
-  xdiffs = as.matrix(data[trtnms,covars])
-  xdiffs = xdiffs - as.matrix(data[ctrnms, covars])
+  xdiffs = as.matrix(.data[trtnms,covars])
+  xdiffs = xdiffs - as.matrix(.data[ctrnms, covars])
   sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
 }
 
-dt_mahalo = as.data.frame(dt)
+dt_mahalo = as..data.frame(dt)
 inv_cov_mat = solve(cov(dt_mahalo[,confounders]))
 trtnms = row.names(dt_mahalo[as.logical(dt_mahalo$treat),])
 ctrnms = row.names(dt_mahalo[!as.logical(dt_mahalo$treat),])
-mahalo_dist = outer(trtnms,ctrnms,FUN = myMH, inv.cov = inv_cov_mat, data = dt_mahalo)
+mahalo_dist = outer(trtnms,ctrnms,FUN = myMH, inv.cov = inv_cov_mat, .data = dt_mahalo)
 
 matches = apply(mahalo_dist,1, function(x) min(which(x == min(x))))
-match_results = as.data.frame(cbind(seq(1,290), matches+290))
+match_results = as..data.frame(cbind(seq(1,290), matches+290))
 colnames(match_results) = c('trt.idx','ctr.idx')
 
 counts = match_results %>% 
@@ -322,7 +322,7 @@ dt$w_mahalo = dt_mahalo_2$w_mahalo
 
 # Check against MatchIt function  
 df = dt[,c('treat',confounders),with=F]
-zz <- matchit(treat ~ momed + booze + bw + bwg + preterm + black + white + dayskidh, data=df, method="nearest", 
+zz <- matchit(treat ~ momed + booze + bw + bwg + preterm + black + white + dayskidh, .data=df, method="nearest", 
               distance="mahalanobis", replace=TRUE)
 zz.out = zz$match.matrix
 sum(match_results$ctr.idx == zz.out)
@@ -379,7 +379,7 @@ as.matrix(df6)
 \texttt{ANSWER:}
 ```{r Q6}
 # Code for Estimating the Propensity Score
-ps.m1 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
+ps.m1 <- glm(treat ~ ., .data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
 
 # Code for Creating the IPTW Weights
@@ -411,7 +411,7 @@ iptw.balance <- check_balance(dt, confounders, r_att)
 
 
 
-### Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5) 
+### Question 8: Estimate the treatment effect for the restructured .datasets implied by Questions 4-6 (Step 5) 
 
 Estimate the effect of the treatment on the treated for each of your five approaches by fitting a regression with weights equal to the number of times each observation appears in the matched sample (that is, use your weights variable from above) or using IPTW weights. Report the treatment effect and standard error for each approach.
 
@@ -421,19 +421,19 @@ dt[treat==0, w:=wts]
 dt[treat==1, w:=1]
 df = dt[,c('ppvtr.36','treat',confounders),with=F]
 
-mod1 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w))$coefficients
+mod1 = summary(lm(ppvtr.36 ~ ., .data = df, weights = dt$w))$coefficients
 mod1.out = c(mod1[2,1],mod1[2,2])
 
-mod2 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_probit))$coefficients
+mod2 = summary(lm(ppvtr.36 ~ ., .data = df, weights = dt$w_probit))$coefficients
 mod2.out = c(mod2[2,1],mod2[2,2])
 
-mod3 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_full))$coefficients
+mod3 = summary(lm(ppvtr.36 ~ ., .data = df, weights = dt$w_full))$coefficients
 mod3.out = c(mod3[2,1],mod3[2,2])
 
-mod4 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_mahalo))$coefficients
+mod4 = summary(lm(ppvtr.36 ~ ., .data = df, weights = dt$w_mahalo))$coefficients
 mod4.out = c(mod4[2,1],mod4[2,2])
 
-mod5 = summary(lm(ppvtr.36 ~ ., data = df, weights = r_att))$coefficients
+mod5 = summary(lm(ppvtr.36 ~ ., .data = df, weights = r_att))$coefficients
 mod5.out = c(mod5[2,1],mod5[2,2])
 
 q8_results = rbind(mod1.out,mod2.out,mod3.out,mod4.out,mod5.out)
