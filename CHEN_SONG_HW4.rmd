@@ -135,6 +135,7 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 checkBalance = function(df, confounders, wts){
 
+  # Subset data to confounders only
   df2 <- df[, confounders]
 
   binary = apply(df2,2,function(x) { all(x %in% 0:1) }) # Binary Variable Indicator
