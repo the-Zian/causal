@@ -13,36 +13,42 @@ wts <- matches$cnts
 
 #########################
 
+df2 = df[,confounders]
+
 examine_balance = function(df2,wts){
   
   binary = apply(df2,2,function(x) { all(x %in% 0:1) }) # Binary Variable Indicator
-  trt = df$treat == 1 # Treatment Indicator
-  ctr = df$treat == 0 # Control Indicator
-  n_trt = sum(trt)    # Treatment Sample Size
-  n_ctrl = sum(ctr)   # Control Sample Size
+  trt = df$treat == 1    # Treatment Indicator
+  ctr = df$treat == 0    # Control Indicator
+  n_trt = sum(trt)       # Treatment Sample Size
+  n_ctrl = sum(ctr)      # Control Sample Size
+  wts.trt = rep(1,n_trt) # Set treatment weights
+  wts.ctr = wts          # Set control weights
   
   # Means
   trt.means = apply(df2[trt,],2,mean)
+  trt.means_w = apply(df2[trt,],2,wtd.mean,wts.trt)
   ctr.means = apply(df2[ctr,],2,mean)
-  ctr.means_w = apply(df2[ctr,],2,wtd.mean,wts)
+  ctr.means_w = apply(df2[ctr,],2,wtd.mean,wts.ctr)
   
   # Variances
   trt.var = apply(df2[trt,],2,var)
+  trt.var_w = apply(df2[trt,],2, function(x) sum(wts.trt * (x - wtd.mean(x, wts.trt))^2) / (sum(wts.trt) - 1))
   ctr.var = apply(df2[ctr,],2,var)
-  ctr.var_w = apply(df2[ctr,],2, function(x) sum(wts * (x - wtd.mean(x, wts))^2) / (sum(wts) - 1))
+  ctr.var_w = apply(df2[ctr,],2, function(x) sum(wts.ctr * (x - wtd.mean(x, wts.ctr))^2) / (sum(wts.ctr) - 1))
   
   # Standardized Mean Differences
   mean.diff = (trt.means-ctr.means) / sqrt((trt.var + ctr.var)/2)
   mean.diff.bin = (trt.means-ctr.means)
   diff = mean.diff*(1-binary) + mean.diff.bin*binary
   
-  mean.diff_w = (trt.means-ctr.means_w) / sqrt((trt.var + ctr.var_w)/2)
-  mean.diff.bin_w = (trt.means-ctr.means_w)
+  mean.diff_w = (trt.means_w-ctr.means_w) / sqrt((trt.var_w + ctr.var_w)/2)
+  mean.diff.bin_w = (trt.means_w-ctr.means_w)
   diff.m = mean.diff_w*(1-binary) + mean.diff.bin_w*binary
   
   # Variance Ratios
   ratio = sqrt(ctr.var)/sqrt(trt.var)
-  ratio.m = sqrt(ctr.var_w)/sqrt(trt.var)
+  ratio.m = sqrt(ctr.var_w)/sqrt(trt.var_w)
   
   # Print
   result = cbind(trt.means,ctr.means,trt.means,ctr.means_w,diff,diff.m,ratio,ratio.m)
