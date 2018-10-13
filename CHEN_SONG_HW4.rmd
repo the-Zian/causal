@@ -297,22 +297,22 @@ examine_overlap(dt,40,var='psc_full',var_name='Propensity Score (Probit Full Mod
 examine_overlap(dt,40,var='psc_rf',var_name='Propensity Score (RF Model)',ylim=c(-30,50),xlab='Propensity Score')
 examine_overlap(dt,40,var='psc_nn',var_name='Propensity Score (NN Model)',ylim=c(-30,50),xlab='Propensity Score')
 
-df = check_balance(dt, confounders, wts)
+df = checkBalance(dt, confounders, wts)
 as.matrix(df)
 
-df2 = check_balance(dt, confounders, dt$w_probit[291:1320])
+df2 = checkBalance(dt, confounders, dt$w_probit[291:1320])
 as.matrix(df2)
 
-df3 = check_balance(dt, confounders, dt$w_full[291:1320])
+df3 = checkBalance(dt, confounders, dt$w_full[291:1320])
 as.matrix(df3)
 
-df4 = check_balance(dt, confounders, dt$w_rf[291:1320])
+df4 = checkBalance(dt, confounders, dt$w_rf[291:1320])
 as.matrix(df4)
 
-df5 = check_balance(dt, confounders, dt$w_nn[291:1320])
+df5 = checkBalance(dt, confounders, dt$w_nn[291:1320])
 as.matrix(df5)
 
-df6 = check_balance(dt, confounders, dt$w_mahalo[291:1320])
+df6 = checkBalance(dt, confounders, dt$w_mahalo[291:1320])
 as.matrix(df6)
 ```
 
@@ -344,7 +344,7 @@ r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
 ```
 
 ```{r Q6.iii}
-iptw.balance <- check_balance(dt, confounders, r_att)
+iptw.balance <- checkBalance(dt, confounders, r_att)
 ```
 
 
