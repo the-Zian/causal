@@ -16,7 +16,6 @@ knitr::opts_knit$set(root.dir='..')
 ```
 
 ```{r rmd, message=FALSE}
-library(data.table)
 library(arm)
 library(ggplot2)
 library(rlang)
@@ -49,18 +48,17 @@ In this assignment will use data from a constructed observational study. The dat
 \texttt{ANSWER:}
 ```{r Q1}
 load('data/hw4.rdata')
-hw4 <- data.table(hw4)
 
 # Pick confounders based on correlation to treatment and outcome variables
-corr_mat = cor(hw4)
+corr_mat <- cor(hw4)
 
-corr_mat = rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
+corr_mat <- rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
 
-confounders = names(which((abs(corr_mat[1,]) > 0.05) * (abs(corr_mat[2,]) > 0.05)>0))
-# confounders = confounders[confounders != 'st99']
+confounders <- names(which((abs(corr_mat[1,]) > 0.05) * (abs(corr_mat[2,]) > 0.05) > 0))
+confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
 
 # Subset data for analysis
-dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
+dt <- hw4[hw4$bw<3000, c('ppvtr.36', 'treat', confounders)]
 ```
 
 
@@ -68,7 +66,7 @@ dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
 
 \texttt{ANSWER:}
 ```{r Q2}
-ps.m1 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
+ps.m1 <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
 plot(dt$psc)
 ```
@@ -98,15 +96,17 @@ wts <- matches$cnts
 ```{r Q4a}
 # Paired, inverted histograms: propensity scores
 examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score', options=NULL){
-    dt_plot = dt[, c('treat',var), with=F]
-    colnames(dt_plot) = c('treat','X')
+
+    dt_plot = dt[, c('treat', var)]
+    colnames(dt_plot) = c('treat', 'X')
+    
     ggplot(dt_plot) +
-    geom_histogram(data=dt_plot[treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=..count.., color=col.RdBl.2[2])) +
-    geom_histogram(data=dt_plot[treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=-..count.., color=col.RdBl.2[1])) +
-    coord_cartesian(ylim=ylim) +
-    scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
-    labs(x=xlab, y='Frequency', title=paste('Overlap of ',var_name,' between Groups',sep='')) +
-    options 
+        geom_histogram(data=dt_plot[dt_plot$treat==0,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=..count.., color=col.RdBl.2[2])) +
+        geom_histogram(data=dt_plot[dt_plot$treat==1,], bins=nbins, fill='grey', alpha=0.1, aes(X, y=-..count.., color=col.RdBl.2[1])) +
+        coord_cartesian(ylim=ylim) +
+        scale_color_manual(values=rev(col.RdBl.2), labels=c('Control', 'Treated'), name='') +
+        labs(x=xlab, y='Frequency', title=paste('Overlap of ', var_name, ' between Groups', sep='')) +
+        options 
 }
 
 examine_overlap(dt, 40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score')
@@ -132,115 +132,56 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 \texttt{ANSWER:}
 ```{r Q4c}
-isBinary <- function(x) {
-    # Check if x is binary
-    all(x %in% c(0,1))
+checkBalance = function(df, confounders, wts){
+
+  df2 <- df[, confounders]
+
+  binary = apply(df2,2,function(x) { all(x %in% 0:1) }) # Binary Variable Indicator
+  trt = df$treat == 1    # Treatment Indicator
+  ctr = df$treat == 0    # Control Indicator
+  n_trt = sum(trt)       # Treatment Sample Size
+  n_ctrl = sum(ctr)      # Control Sample Size
+  wts.trt = rep(1,n_trt) # Set treatment weights
+  wts.ctr = wts          # Set control weights
+  
+  # Means
+  trt.means = apply(df2[trt,],2,mean)
+  trt.means_w = apply(df2[trt,],2,wtd.mean,wts.trt)
+  ctr.means = apply(df2[ctr,],2,mean)
+  ctr.means_w = apply(df2[ctr,],2,wtd.mean,wts.ctr)
+  
+  # Variances
+  trt.var = apply(df2[trt,],2,var)
+  trt.var_w = apply(df2[trt,],2, function(x) sum(wts.trt * (x - wtd.mean(x, wts.trt))^2) / (sum(wts.trt) - 1))
+  ctr.var = apply(df2[ctr,],2,var)
+  ctr.var_w = apply(df2[ctr,],2, function(x) sum(wts.ctr * (x - wtd.mean(x, wts.ctr))^2) / (sum(wts.ctr) - 1))
+  
+  # Standardized Mean Differences
+  mean.diff = (trt.means-ctr.means) / sqrt((trt.var + ctr.var)/2)
+  mean.diff.bin = (trt.means-ctr.means)
+  diff = mean.diff*(1-binary) + mean.diff.bin*binary
+  
+  mean.diff_w = (trt.means_w-ctr.means_w) / sqrt((trt.var_w + ctr.var_w)/2)
+  mean.diff.bin_w = (trt.means_w-ctr.means_w)
+  diff.m = mean.diff_w*(1-binary) + mean.diff.bin_w*binary
+  
+  # Variance Ratios
+  ratio = sqrt(ctr.var)/sqrt(trt.var)
+  ratio.m = sqrt(ctr.var_w)/sqrt(trt.var_w)
+  
+  # Print
+  result = cbind(trt.means,ctr.means,trt.means,ctr.means_w,diff,diff.m,ratio,ratio.m)
+  colnames(result) = c('mn1','mn0','mn1.m','mn0.m','diff','diff.m','ratio','ratio.m')
+  return(round(result,3))
 }
 
-wtdMean <- function(x, wts) {
-    # Calculate weighted mean of x
-    sum(wts * x) / sum(wts)
-}
-
-wtdVar <- function(x, wts) {
-    # Calculate weighted sample variance
-    if (isBinary(x)) {
-        sum(wts * (x - wtdMean(x, wts))^2) / (sum(wts) - 1)
-        return( sum(wts^2 * mean(x) * (1 - mean(x))) / sum(wts) )
-    } else {
-        return( sum(wts * (x - wtdMean(x, wts))^2) / (sum(wts) - 1) )
-    }
-}
-
-meanDiff <- function(x, data, wtd=FALSE) {
-    # Calculate mean difference of x between treated and controls
-    # Standardized mean difference for continuous variables
-    treated <- data[treat==1, get(x)]
-    control <- data[treat==0, get(x)]
-
-    x1 <- mean(treated)
-    if (isBinary(data[, get(x)])) {
-        if (wtd) {
-            wts <- data[treat==0, w]
-            x0 <- wtdMean(control, wts)
-        } else {
-            x0 <- mean(control)
-        }
-        return(x1 - x0)
-    } else {
-        var1 <- var(treated)
-        if (wtd) {
-            wts <- data[treat==0, w]
-            x0 <- wtdMean(control, wts)
-            var0 <- wtdVar(control, wts)
-        } else {
-            x0 <- mean(control)
-            var0 <- var(control)
-        }
-        return( (x1 - x0) / sqrt((var1 + var0) / 2) )
-    }
-}
-
-ratioSD <- function(x, data, wtd=FALSE) {
-    # Calculate ratio (control/treated) of standard deviations
-    treated <- data[treat==1, get(x)]
-    control <- data[treat==0, get(x)]
-    x.binary <- isBinary(data[, get(x)])
-
-    if (wtd) {
-        wts <- data[treat==0, w]
-        if (x.binary) {
-            var1 <- mean(treated) * (1 - mean(treated))
-            # var0 <- mean(control) * (1 - mean(control))
-            var0 <- wtdVar(control, wts)
-        } else {
-            var1 <- var(treated)
-            var0 <- wtdVar(control, wts)
-        }
-    } else {
-        if (x.binary) {
-            var1 <- mean(treated) * (1 - mean(treated))
-            var0 <- mean(control) * (1 - mean(control))
-        } else {
-            var1 <- var(treated)
-            var0 <- var(control)
-        }
-    }
-    return( sqrt(var0) / sqrt(var1) )
-}
-
-checkBalance <- function(data, X, wts) {
-    # set weights
-    data[treat==0, w:=wts]
-    data[treat==1, w:=1]
-
-    # 1. Means in unmatched treatment group
-    mn1 <- melt(data[treat==1, sapply(.SD, mean), .SDcols=X], value.name='mn1')
-    # 2. Means in unmatched control group
-    mn0 <- melt(data[treat==0, sapply(.SD, mean), .SDcols=X], value.name='mn0')
-    # 3. Means in matched treatment group
-    mn1.m <- melt(data[treat==1 & w>0, sapply(.SD, mean), .SDcols=X], value.name='mn1.m')
-    # 4 Means in matched control group
-    mn0.m <- melt(data[treat==0 & w>0, sapply(.SD, wtdMean, wts=w), .SDcols=X], value.name='mn0.m')
-    # 5. Mean difference in unmatched sample
-    diff <- melt(sapply(X, meanDiff, data=data), value.name='diff')
-    # 6. Mean difference in matched sample
-    diff.m <- melt(sapply(X, meanDiff, data=data[w>0,], wtd=TRUE), value.name='diff.m')
-    # 7. Ratio of standard deviation in unmatched sample (control/treated)
-    ratio <- melt(sapply(X, ratioSD, data=data), value.name='ratio')
-    # 8. Ratio of standard deviation in matched sample (control/treated)
-    ratio.m <- melt(sapply(X, ratioSD, data=data[w>0,], wtd=TRUE), value.name='ratio.m')
-
-    # Return estimates
-    return( data.frame(mn1, mn0, mn1.m, mn0.m, diff, diff.m, ratio, ratio.m) )
-}
 ```
 
 ### (d) How do you interpret the resulting balance? In particular what are your concerns with regard to covariates that are not well balanced (write about 5 or 6 sentences).
 
 \texttt{ANSWER:}
 ```{r Q4d}
-df <- checkBalance(data=dt, X=confounders, wts=wts)
+checkBalance(df=dt, confounders=confounders, wts=wts)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
@@ -248,7 +189,7 @@ df <- checkBalance(data=dt, X=confounders, wts=wts)
 \texttt{ANSWER:}
 ```{r Q4e}
 # Subset data
-temp <- hw4[bw<3000, .(treat, bw, b.marr)]
+temp <- hw4[hw4$bw<3000, c('treat', 'bw', 'b.marr')]
 # Fit propensity score model (logistic)
 ps.m2 <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
 # Generate propensities scores
@@ -266,24 +207,24 @@ checkBalance(temp, c('bw', 'b.marr'), ps.m2.matches$cnts)
 \texttt{ANSWER:}
 ```{r Q5.i}
 # Model 2: Probit
-ps.m2 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
+ps.m2 <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='probit'))
 summary(ps.m2)
 dt$psc_probit <- ps.m2$fitted.values
 confusionMatrix(ifelse(dt$psc_probit>0.5,1,0), dt$treat)
 
 # Model 3: Probit with interactions
-ps.m3 <- glm(treat ~ .^2, data=dt[,c('treat',confounders),with=F], family=binomial(link='probit'))
+ps.m3 <- glm(treat ~ .^2, data=dt[, c('treat',confounders)], family=binomial(link='probit'))
 summary(ps.m3)
 dt$psc_full <- ps.m3$fitted.values
 confusionMatrix(ifelse(dt$psc_full>0.5,1,0), dt$treat)
 
 # Model 4: Random Forest
-m.rf = randomForest(as.factor(treat) ~ ., data=dt[,c('treat',confounders),with=F], ntree = 10)
+m.rf = randomForest(as.factor(treat) ~ ., data=dt[, c('treat',confounders)], ntree = 10)
 dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
 confusionMatrix(ifelse(dt$psc_rf>0.5,1,0), dt$treat)
 
 # Model 5: Neural Net
-dt_nnet = as.data.frame(dt[,c('treat',confounders),with=F])
+dt_nnet = as.data.frame(dt[, c('treat',confounders))
 dt_nnet[,which(sapply(dt_nnet,class)=="numeric")] = scale(dt_nnet[,which(sapply(dt_nnet,class)=="numeric")])
 dt_nnet$treat = as.factor(dt_nnet$treat)
 
@@ -295,35 +236,35 @@ confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
 ```{r Q5.ii}
 # Mahalanobis Distance
 myMH = function(trtnms, ctrnms, inv.cov, data){
-  covars = dimnames(inv.cov)[[1]]
-  xdiffs = as.matrix(data[trtnms,covars])
-  xdiffs = xdiffs - as.matrix(data[ctrnms, covars])
+  covars <- dimnames(inv.cov)[[1]]
+  xdiffs <- as.matrix(data[trtnms,covars])
+  xdiffs <-xdiffs - as.matrix(data[ctrnms, covars])
   sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
 }
 
-dt_mahalo = as.data.frame(dt)
-inv_cov_mat = solve(cov(dt_mahalo[,confounders]))
-trtnms = row.names(dt_mahalo[as.logical(dt_mahalo$treat),])
-ctrnms = row.names(dt_mahalo[!as.logical(dt_mahalo$treat),])
-mahalo_dist = outer(trtnms,ctrnms,FUN = myMH, inv.cov = inv_cov_mat, data = dt_mahalo)
+dt_mahalo <- dt
+inv_cov_mat <- solve(cov(dt_mahalo[,confounders]))
+trtnms <- row.names(dt_mahalo[as.logical(dt_mahalo$treat),])
+ctrnms <- row.names(dt_mahalo[!as.logical(dt_mahalo$treat),])
+mahalo_dist <- outer(trtnms,ctrnms,FUN = myMH, inv.cov = inv_cov_mat, data = dt_mahalo)
 
-matches = apply(mahalo_dist,1, function(x) min(which(x == min(x))))
-match_results = as.data.frame(cbind(seq(1,290), matches+290))
-colnames(match_results) = c('trt.idx','ctr.idx')
+matches <- apply(mahalo_dist,1, function(x) min(which(x == min(x))))
+match_results <- as.data.frame(cbind(seq(1,290), matches+290))
+colnames(match_results) <- c('trt.idx','ctr.idx')
 
-counts = match_results %>% 
-group_by(ctr.idx) %>%
-dplyr::summarize(w_mahalo=n())
+counts <- match_results %>% 
+    group_by(ctr.idx) %>%
+    dplyr::summarize(w_mahalo=n())
 
-dt_mahalo_2 = dt_mahalo %>%
-mutate(id = as.integer(rownames(dt_mahalo))) %>%
-left_join(counts, by = c("id" = "ctr.idx")) %>%
-mutate(w_mahalo = treat + ifelse(is.na(w_mahalo),0,w_mahalo))
+dt_mahalo_2 <- dt_mahalo %>%
+    mutate(id = as.integer(rownames(dt_mahalo))) %>%
+    left_join(counts, by=c("id" = "ctr.idx")) %>%
+    mutate(w_mahalo=treat + ifelse(is.na(w_mahalo), 0, w_mahalo))
 
 dt$w_mahalo = dt_mahalo_2$w_mahalo
 
 # Check against MatchIt function  
-df = dt[,c('treat',confounders),with=F]
+df <- dt[, c('treat', confounders)]
 zz <- matchit(treat ~ momed + booze + bw + bwg + preterm + black + white + dayskidh, data=df, method="nearest", 
               distance="mahalanobis", replace=TRUE)
 zz.out = zz$match.matrix
@@ -333,20 +274,20 @@ sum(match_results$ctr.idx == zz.out)
 ```{r Q5.iii}
 # Rematching
 matches <- matching(z=dt$treat, score=dt$psc_probit, replace=TRUE)
-dt[treat==1, w_probit:=1]
-dt[treat==0, w_probit:=matches$cnts]
+dt[dt$treat==1, 'w_probit'] <- 1
+dt[dt$treat==0, 'w_probit'] <- matches$cnt
 
 matches <- matching(z=dt$treat, score=dt$psc_full, replace=TRUE)
-dt[treat==1, w_full:=1]
-dt[treat==0, w_full:=matches$cnts]
+dt[dt$treat==1, 'w_full'] <- 1
+dt[dt$treat==0, 'w_full'] <- matches$cnts
 
 matches <- matching(z=dt$treat, score=dt$psc_rf, replace=TRUE)
-dt[treat==1, w_rf:=1]
-dt[treat==0, w_rf:=matches$cnts]
+dt[dt$treat==1, 'w_rf'] <- 1
+dt[dt$treat==0, 'w_rf'] <- matches$cnts
 
 matches <- matching(z=dt$treat, score=dt$psc_nn, replace=TRUE)
-dt[treat==1, w_nn:=1]
-dt[treat==0, w_nn:=matches$cnts]
+dt[dt$treat==1, 'w_nn'] <- 1
+dt[dt$treat==0, 'w_nn'] <- matches$cnts
 
 # OVERLAP
 # Paired, inverted histograms: propensity scores
@@ -356,22 +297,22 @@ examine_overlap(dt,40,var='psc_full',var_name='Propensity Score (Probit Full Mod
 examine_overlap(dt,40,var='psc_rf',var_name='Propensity Score (RF Model)',ylim=c(-30,50),xlab='Propensity Score')
 examine_overlap(dt,40,var='psc_nn',var_name='Propensity Score (NN Model)',ylim=c(-30,50),xlab='Propensity Score')
 
-df = check_balance(dt, confounders, wts)
+df = checkBalance(dt, confounders, wts)
 as.matrix(df)
 
-df2 = check_balance(dt, confounders, dt$w_probit[291:1320])
+df2 = checkBalance(dt, confounders, dt$w_probit[291:1320])
 as.matrix(df2)
 
-df3 = check_balance(dt, confounders, dt$w_full[291:1320])
+df3 = checkBalance(dt, confounders, dt$w_full[291:1320])
 as.matrix(df3)
 
-df4 = check_balance(dt, confounders, dt$w_rf[291:1320])
+df4 = checkBalance(dt, confounders, dt$w_rf[291:1320])
 as.matrix(df4)
 
-df5 = check_balance(dt, confounders, dt$w_nn[291:1320])
+df5 = checkBalance(dt, confounders, dt$w_nn[291:1320])
 as.matrix(df5)
 
-df6 = check_balance(dt, confounders, dt$w_mahalo[291:1320])
+df6 = checkBalance(dt, confounders, dt$w_mahalo[291:1320])
 as.matrix(df6)
 ```
 
@@ -381,7 +322,7 @@ as.matrix(df6)
 \texttt{ANSWER:}
 ```{r Q6}
 # Code for Estimating the Propensity Score
-ps.m1 <- glm(treat ~ ., data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
+ps.m1 <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
 
 # Code for Creating the IPTW Weights
@@ -403,7 +344,7 @@ r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
 ```
 
 ```{r Q6.iii}
-iptw.balance <- check_balance(dt, confounders, r_att)
+iptw.balance <- checkBalance(dt, confounders, r_att)
 ```
 
 
@@ -419,8 +360,8 @@ Estimate the effect of the treatment on the treated for each of your five approa
 
 \texttt{ANSWER:}
 ```{r Q8}
-dt[treat==0, w:=wts]
-dt[treat==1, w:=1]
+dt[dt$treat==0, 'w'] <- wts
+dt[dt$treat==1, 'w'] <- 1
 df = dt[,c('ppvtr.36','treat',confounders),with=F]
 
 mod1 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w))$coefficients
