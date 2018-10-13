@@ -55,8 +55,9 @@ hw4 <- .data.table(hw4)
 corr_mat = cor(hw4)
 
 corr_mat = rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
-confounders = names(which(apply(abs(corr_mat) >= 0.3 & abs(corr_mat) != 1, 2, sum) > 0))
-confounders = confounders[confounders != 'st99']
+
+confounders = names(which((abs(corr_mat[1,]) > 0.05) * (abs(corr_mat[2,]) > 0.05)>0))
+# confounders = confounders[confounders != 'st99']
 
 # Subset .data for analysis
 dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
@@ -69,6 +70,7 @@ dt <- hw4[bw<3000, c('ppvtr.36', 'treat', confounders), with=FALSE]
 ```{r Q2}
 ps.m1 <- glm(treat ~ ., .data=dt[,c('treat',confounders),with=F], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
+plot(dt$psc)
 ```
 
 
