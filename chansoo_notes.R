@@ -25,22 +25,22 @@ examine_balance = function(df, confounders, wts){
   
   # Means
   trt.means = apply(df2[trt,],2,mean)
-  trt.means_w = apply(df2[trt,],2,wtd.mean,wts.trt)
+  trt.means_w = apply(df2[trt,],2,weighted.mean,wts.trt)
   ctr.means = apply(df2[ctr,],2,mean)
-  ctr.means_w = apply(df2[ctr,],2,wtd.mean,wts.ctr)
+  ctr.means_w = apply(df2[ctr,],2,weighted.mean,wts.ctr)
   
   # Variances
   trt.var = apply(df2[trt,],2,var)
-  trt.var_w = apply(df2[trt,],2, function(x) sum(wts.trt * (x - wtd.mean(x, wts.trt))^2) / (sum(wts.trt) - 1))
+  trt.var_w = apply(df2[trt,],2, function(x) sum(wts.trt * (x - weighted.mean(x, wts.trt))^2) / (sum(wts.trt) - 1))
   ctr.var = apply(df2[ctr,],2,var)
-  ctr.var_w = apply(df2[ctr,],2, function(x) sum(wts.ctr * (x - wtd.mean(x, wts.ctr))^2) / (sum(wts.ctr) - 1))
+  ctr.var_w = apply(df2[ctr,],2, function(x) sum(wts.ctr * (x - weighted.mean(x, wts.ctr))^2) / (sum(wts.ctr) - 1))
   
   # Standardized Mean Differences
-  mean.diff = (trt.means-ctr.means) / sqrt((trt.var + ctr.var)/2)
+  mean.diff = (trt.means-ctr.means) / sqrt(trt.var)
   mean.diff.bin = (trt.means-ctr.means)
   diff = mean.diff*(1-binary) + mean.diff.bin*binary
   
-  mean.diff_w = (trt.means_w-ctr.means_w) / sqrt((trt.var_w + ctr.var_w)/2)
+  mean.diff_w = (trt.means_w-ctr.means_w) / sqrt(trt.var_w)
   mean.diff.bin_w = (trt.means_w-ctr.means_w)
   diff.m = mean.diff_w*(1-binary) + mean.diff.bin_w*binary
   
@@ -54,4 +54,4 @@ examine_balance = function(df, confounders, wts){
   return(round(result,3))
 }
 
-examine_balance(df[,confounders],wts)
+examine_balance(df,confounders,wts)
