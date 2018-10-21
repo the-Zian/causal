@@ -21,6 +21,7 @@ library(ggplot2)
 library(rlang)
 library(RColorBrewer)
 library(stats)
+library(Hmisc)
 library(caret)
 library(randomForest)
 library(nnet)
@@ -52,7 +53,7 @@ load('data/hw4.rdata')
 # Pick confounders based on correlation to treatment and outcome variables
 corr_mat <- cor(hw4)
 
-corr_mat <- rbind(corr_mat['treat',],corr_mat['ppvtr.36',])
+corr_mat <- rbind(corr_mat['treat',], corr_mat['ppvtr.36',])
 
 confounders <- names(which((abs(corr_mat[1,]) > 0.3) + (abs(corr_mat[2,]) > 0.3) > 0))
 confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
@@ -83,8 +84,15 @@ plot(dt$psc)
 The IHDP intervention targeted children that were born premature and with low birth weight, thus the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
 
 ```{r Q3}
+createWeights <- function(df, ctr.wts) {
+    # Create weights variable for 1-1 matching to treatment group with replacement
+    df[df$treat==0, 'wt'] <- ctr.wts
+    df[df$treat==1, 'wt'] <- 1
+    return(df)
+}
+
 matches <- matching(z=dt$treat, score=dt$psc, replace=TRUE)
-wts <- matches$cnts
+dt <- createWeights(dt, matches$cnts)
 ```
 
 
@@ -95,7 +103,7 @@ wts <- matches$cnts
 \texttt{ANSWER:}
 ```{r Q4a}
 # Paired, inverted histograms: propensity scores
-examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score', options=NULL){
+examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-30,50), options=NULL){
 
     dt_plot = dt[, c('treat', var)]
     colnames(dt_plot) = c('treat', 'X')
@@ -109,15 +117,20 @@ examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score',
         options 
 }
 
-examine_overlap(dt, 40, var='psc', var_name='Propensity Score', ylim=c(-30,50), xlab='Propensity Score')
-examine_overlap(dt, 20, var='preterm', var_name='Number Weeks Baby Born Preterm', ylim=c(-100,150), xlab='Weeks Preterm')
-examine_overlap(dt, 20, var='bw', var_name='Birthweight', ylim=c(-50,200), xlab='Birthweight')
+# Overlap of propensity score
+examine_overlap(dt, nbins=40, var='psc', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-30,50))
+# Overlap of preterm
+examine_overlap(dt, nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-100,150))
+# Overlap of birth weight
+examine_overlap(dt, nbins=20, var='bw', var_name='Birth weight', xlab='Birth weight', ylim=c(-50,200))
+# Overlap of days child in hospital after birth
+examine_overlap(dt, 40, var='dayskidh', var_name='Days child in hospital after birth', xlab='Days', ylim=c(-60, 80))
 ```
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
 
 \texttt{ANSWER:}  
-Since our estimand of interest is the \texttt{ATT}, we need similar observations from the control group to use as our counterfactuals for the treatment group. The plots above show sufficient overlap (relative to the treated) between the two groups in propensity scores, mother's education level, and number of weeks the baby was born preterm. There is overlap in mother's age at birth from approximately around age values 25-35, but there are no counterfactual observations for the treated children with mothers that are either younger or older than that 25-35 age range.
+Since our estimand of interest is the \texttt{ATT}, we need similar observations from the control group to use as our counterfactuals for the treatment group. The plots above show sufficient overlap (relative to the treated) between the two groups in propensity scores, number of weeks the baby was born preterm, child's birth weight, and days child was in hospital after birth.
 
 ### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
 
@@ -133,58 +146,59 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 \texttt{ANSWER:}
 ```{r Q4c}
 
-checkBalance = function(df, confounders, wts){
+checkBalance = function(df, confounders, wt_var) {
 
-  # Subset data to confounders only
-  df2 <- df[, confounders]
+    # Subset data to confounders only
+    df2 <- df[, confounders]
 
-  binary = apply(df2,2,function(x) { all(x %in% 0:1) }) # Binary Variable Indicator
-  trt = df$treat == 1                   # Treatment Indicator
-  ctr = df$treat == 0                   # Control Indicator
-  n_trt = sum(trt)                      # Treatment Sample Size
-  n_ctrl = sum(ctr)                     # Control Sample Size
-  wts.trt = wts[1:n_trt]                # Set treatment weights
-  wts.ctr = wts[(n_trt+1):length(wts)]  # Set control weights
+    binary = apply(df2, 2, function(x) all(x %in% 0:1)) # Binary Variable Indicator
+    trt = df$treat == 1                   # Treatment Indicator
+    ctr = df$treat == 0                   # Control Indicator
+    n_trt = sum(trt)                      # Treatment Sample Size
+    n_ctrl = sum(ctr)                     # Control Sample Size
+    wts.trt = df[trt, wt_var]              # Set treatment weights
+    wts.ctr = df[ctr, wt_var]  # Set control weights
   
-  # Means
-  trt.means = apply(df2[trt,],2,mean)
-  trt.means_w = apply(df2[trt,],2,wtd.mean,wts.trt)
-  ctr.means = apply(df2[ctr,],2,mean)
-  ctr.means_w = apply(df2[ctr,],2,wtd.mean,wts.ctr)
+    # Means
+    trt.means = apply(df2[trt,], 2, mean)
+    trt.means_w = apply(df2[trt,], 2, wtd.mean, wts.trt)
+    ctr.means = apply(df2[ctr,], 2, mean)
+    ctr.means_w = apply(df2[ctr,], 2, wtd.mean, wts.ctr)
   
-  # Variances
-  trt.var = apply(df2[trt,],2,var)
-  trt.var_w = apply(df2[trt,],2, function(x) sum(wts.trt * (x - wtd.mean(x, wts.trt))^2) / (sum(wts.trt) - 1))
-  ctr.var = apply(df2[ctr,],2,var)
-  ctr.var_w = apply(df2[ctr,],2, function(x) sum(wts.ctr * (x - wtd.mean(x, wts.ctr))^2) / (sum(wts.ctr) - 1))
+    # Variances
+    trt.var = apply(df2[trt,], 2, var)
+    trt.var_w = apply(df2[trt,], 2, function(x) sum(wts.trt * (x - wtd.mean(x, wts.trt))^2) / (sum(wts.trt) - 1))
+    ctr.var = apply(df2[ctr,], 2, var)
+    ctr.var_w = apply(df2[ctr,], 2, function(x) sum(wts.ctr * (x - wtd.mean(x, wts.ctr))^2) / (sum(wts.ctr) - 1))
   
-  # Standardized Mean Differences
-  mean.diff = (trt.means-ctr.means) / sqrt((trt.var + ctr.var)/2)
-  mean.diff.bin = (trt.means-ctr.means)
-  diff = mean.diff*(1-binary) + mean.diff.bin*binary
+    # Standardized Mean Differences
+    mean.diff = (trt.means-ctr.means) / sqrt(trt.var)
+    mean.diff.bin = (trt.means-ctr.means)
+    diff = mean.diff * (1-binary) + mean.diff.bin * binary
   
-  mean.diff_w = (trt.means_w-ctr.means_w) / sqrt((trt.var_w + ctr.var_w)/2)
-  mean.diff.bin_w = (trt.means_w-ctr.means_w)
-  diff.m = mean.diff_w*(1-binary) + mean.diff.bin_w*binary
+    mean.diff_w = (trt.means_w-ctr.means_w) / sqrt(trt.var_w)
+    mean.diff.bin_w = (trt.means_w-ctr.means_w)
+    diff.m = mean.diff_w*(1-binary) + mean.diff.bin_w*binary
   
-  # Variance Ratios
-  ratio = sqrt(ctr.var)/sqrt(trt.var)
-  ratio.m = sqrt(ctr.var_w)/sqrt(trt.var_w)
+    # Ratios of standard deviations
+    ratio = sqrt(ctr.var)/sqrt(trt.var)
+    ratio[binary] = NA
+
+    ratio.m = sqrt(ctr.var_w)/sqrt(trt.var_w)
+    ratio.m[binary] = NA
   
-  # Print
-  result = cbind(trt.means,ctr.means,trt.means,ctr.means_w,diff,diff.m,ratio,ratio.m)
-  colnames(result) = c('mn1','mn0','mn1.m','mn0.m','diff','diff.m','ratio','ratio.m')
-  return(round(result,3))
+    # Return results
+    result = cbind(trt.means, ctr.means, trt.means, ctr.means_w, diff, diff.m, ratio, ratio.m)
+    colnames(result) = c('mn1', 'mn0', 'mn1.m', 'mn0.m', 'diff', 'diff.m', 'ratio', 'ratio.m')
+    return(result)
 }
-
 ```
 
 ### (d) How do you interpret the resulting balance? In particular what are your concerns with regard to covariates that are not well balanced (write about 5 or 6 sentences).
 
 \texttt{ANSWER:}
 ```{r Q4d}
-wts2 = c(rep(1,290),wts)
-checkBalance(df=dt, confounders=confounders, wts=wts2)
+checkBalance(df=dt, confounders=confounders, wt_var='wt')
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
@@ -199,8 +213,9 @@ ps.m2 <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
 temp$psc <- ps.m2$fitted.values
 # 1-1 nearest neighbor matching with replacement
 ps.m2.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
+temp <- createWeights(temp, ps.m2.matches$cnts)
 
-checkBalance(temp, c('bw', 'b.marr'), c(rep(1,290),ps.m2.matches$cnts))
+round(checkBalance(temp, c('bw', 'b.marr'), 'wt'), 3)
 ```
 
 
@@ -239,21 +254,46 @@ confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
 ```{r Q5.ii}
 # Mahalanobis Distance
 myMH = function(trtnms, ctrnms, inv.cov, data){
-  covars <- dimnames(inv.cov)[[1]]
-  xdiffs <- as.matrix(data[trtnms,covars])
-  xdiffs <-xdiffs - as.matrix(data[ctrnms, covars])
-  sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
+    # Helper function: calculates mahalanobis distance between a pair of treated and control observations
+    covars <- dimnames(inv.cov)[[1]]
+    xdiffs <-as.matrix(data[trtnms, covars]) - as.matrix(data[ctrnms, covars])
+    sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
 }
 
-dt_mahalo <- dt
-inv_cov_mat <- solve(cov(dt_mahalo[,confounders]))
-trtnms <- row.names(dt_mahalo[as.logical(dt_mahalo$treat),])
-ctrnms <- row.names(dt_mahalo[!as.logical(dt_mahalo$treat),])
-mahalo_dist <- outer(trtnms,ctrnms,FUN = myMH, inv.cov = inv_cov_mat, data = dt_mahalo)
+mahaloMahalanobis = function(df, confounders) {
+    # Calculate mahalanobis distance for all treated X control pairs
+    inv_cov_mat = solve(cov(df[, confounders]))
+    treated = row.names(df[df$treat==1,])
+    controls = row.names(df[df$treat==0,])
+    return( outer(treated, controls, FUN=myMH, inv.cov=inv_cov_mat, data=df) )
+}
 
-matches <- apply(mahalo_dist,1, function(x) min(which(x == min(x))))
-match_results <- as.data.frame(cbind(seq(1,290), matches+290))
-colnames(match_results) <- c('trt.idx','ctr.idx')
+matchMahalanobis = function(mahalanobisDist, data) {
+    # Find nearest neighbor given mahalanobis distance matrix; return weight counts
+    
+    treat.idx = as.integer(row.names(data[data$treat==1,]))
+    ctrl.idx = as.integer(row.names(data[data$treat==0,]))
+    # Find matched pairs
+    matches = apply(mahaloDist, 1, function(d) min(which(d == min(d))))
+    match.results = data.frame(trt.idx=treat.idx,
+        ctr.idx=matches + length(treat.idx))
+    # Count match weights for controls
+    counts = as.data.frame(tapply(match.results$ctr.idx, match.results$ctr.idx, length))
+    # Append unmatched controls
+    ctrls = as.integer(row.names(data[data$treat==0,]))
+    rows = ctrls[!(ctrls %in% row.names(counts))]
+
+    which(!(row.names(data[data$treat==0,]) %in% as.integer(row.names(counts)))]
+    unmatched = data.frame()
+    return(counts)
+}
+
+mahalanobisDist = mahaloMahalanobis(dt, confounders)
+dt[dt$treat==0, 'w.mh'] = matchMahalanobis(mahalanobisDist)
+dt[dt$treat==1, 'w.mh'] = 1
+# Find nearest neighbor using mahalanobis distance
+matches <- apply(mahalanobisDist, 1, function(x) min(which(x == min(x))))
+match_results <- data.frame(trt.idx=seq(1,290), ctr.idx=matches+290))
 
 counts <- match_results %>% 
     group_by(ctr.idx) %>%
