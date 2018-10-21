@@ -146,7 +146,7 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 \texttt{ANSWER:}
 ```{r Q4c}
 
-checkBalance = function(df, confounders, wt_var) {
+checkBalance = function(df, confounders, wt_var, digits=3) {
 
     # Subset data to confounders only
     df2 <- df[, confounders]
@@ -204,7 +204,7 @@ checkBalance = function(df, confounders, wt_var) {
     # Return results
     result = cbind(trt.means, ctr.means, trt.means, ctr.means_w, diff, diff.m, ratio, ratio.m)
     colnames(result) = c('mn1', 'mn0', 'mn1.m', 'mn0.m', 'diff', 'diff.m', 'ratio', 'ratio.m')
-    return(result)
+    return(round(result, 3))
 }
 ```
 
@@ -229,7 +229,7 @@ temp$psc <- ps.m2$fitted.values
 ps.m2.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
 temp <- createWeights(temp, ps.m2.matches$cnts)
 
-round(checkBalance(temp, c('bw', 'b.marr'), 'wt'), 3)
+checkBalance(temp, c('bw', 'b.marr'), 'wt')
 ```
 
 
