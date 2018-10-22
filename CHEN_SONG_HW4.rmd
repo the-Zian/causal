@@ -52,11 +52,15 @@ load('data/hw4.rdata')
 
 # Pick confounders based on correlation to treatment and outcome variables
 corr_mat <- cor(hw4)
-
 corr_mat <- rbind(corr_mat['treat',], corr_mat['ppvtr.36',])
-
 confounders <- names(which((abs(corr_mat[1,]) > 0.3) + (abs(corr_mat[2,]) > 0.3) > 0))
 confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
+# Remove post-treatment variables
+confounders <- confounders[!(confounders %in% c('dayskidh', 'income'))]
+# Replace momed with dummy variables
+if ('momed' %in% confounders) {
+    confounders <- c(confounders[!(confounders %in% 'momed')], c('lths', 'hs', 'ltcoll', 'college'))
+}
 
 # Subset data for analysis
 dt <- hw4[hw4$bw<3000, c('ppvtr.36', 'treat', confounders)]
@@ -84,15 +88,9 @@ plot(dt$psc)
 The IHDP intervention targeted children that were born premature and with low birth weight, thus the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
 
 ```{r Q3}
-createWeights <- function(df, ctr.wts) {
-    # Create weights variable for 1-1 matching to treatment group with replacement
-    df[df$treat==0, 'wt'] <- ctr.wts
-    df[df$treat==1, 'wt'] <- 1
-    return(df)
-}
-
 matches <- matching(z=dt$treat, score=dt$psc, replace=TRUE)
-dt <- createWeights(dt, matches$cnts)
+dt[dt$treat==0, 'wt'] <- matches$cnts
+dt[dt$treat==1, 'wt'] <- 1
 ```
 
 
@@ -123,8 +121,6 @@ examine_overlap(dt, nbins=40, var='psc', var_name='Propensity Score', xlab='Prop
 examine_overlap(dt, nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-100,150))
 # Overlap of birth weight
 examine_overlap(dt, nbins=20, var='bw', var_name='Birth weight', xlab='Birth weight', ylim=c(-50,200))
-# Overlap of days child in hospital after birth
-examine_overlap(dt, 40, var='dayskidh', var_name='Days child in hospital after birth', xlab='Days', ylim=c(-60, 80))
 ```
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
@@ -145,7 +141,6 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 \texttt{ANSWER:}
 ```{r Q4c}
-
 checkBalance = function(df, confounders, wt_var, digits=3) {
 
     # Subset data to confounders only
@@ -198,7 +193,8 @@ checkBalance = function(df, confounders, wt_var, digits=3) {
 
 \texttt{ANSWER:}
 ```{r Q4d}
-checkBalance(df=dt, confounders=confounders, wt_var='wt')
+ps.m1.bal <- checkBalance(df=dt, confounders=confounders, wt_var='wt')
+ps.m1.bal
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
@@ -208,12 +204,13 @@ checkBalance(df=dt, confounders=confounders, wt_var='wt')
 # Subset data
 temp <- hw4[hw4$bw<3000, c('treat', 'bw', 'b.marr')]
 # Fit propensity score model (logistic)
-ps.m2 <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
+ps.temp <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
 # Generate propensities scores
-temp$psc <- ps.m2$fitted.values
+temp$psc <- ps.temp$fitted.values
 # 1-1 nearest neighbor matching with replacement
-ps.m2.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
-temp <- createWeights(temp, ps.m2.matches$cnts)
+ps.temp.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
+temp[temp$treat==0, 'wt'] <- ps.temp.matches$cnts
+temp[temp$treat==1, 'wt'] <- 1
 
 checkBalance(temp, c('bw', 'b.marr'), 'wt')
 ```
@@ -222,95 +219,74 @@ checkBalance(temp, c('bw', 'b.marr'), 'wt')
 ## Question 5: Repeat steps 2-4 within the matching framework.
 
 \texttt{ANSWER:}
-```{r Q5.i}
+```{r Q5.probit}
 # Model 2: Probit
-ps.m2 <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='probit'))
+ps.m2 <- glm(treat ~ ., data=dt[, c('treat', confounders)], family=binomial(link='probit'))
 summary(ps.m2)
 dt$psc_probit <- ps.m2$fitted.values
-confusionMatrix(ifelse(dt$psc_probit>0.5,1,0), dt$treat)
-
-# Model 3: Probit with interactions
-ps.m3 <- glm(treat ~ .^2, data=dt[, c('treat',confounders)], family=binomial(link='probit'))
-summary(ps.m3)
-dt$psc_full <- ps.m3$fitted.values
-confusionMatrix(ifelse(dt$psc_full>0.5,1,0), dt$treat)
-
-# Model 4: Random Forest
-m.rf = randomForest(as.factor(treat) ~ ., data=dt[, c('treat',confounders)], ntree = 10)
-dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
-confusionMatrix(ifelse(dt$psc_rf>0.5,1,0), dt$treat)
-
-# Model 5: Neural Net
-dt_nnet = as.data.frame(dt[, c('treat',confounders)])
-dt_nnet[,which(sapply(dt_nnet,class)=="numeric")] = scale(dt_nnet[,which(sapply(dt_nnet,class)=="numeric")])
-dt_nnet$treat = as.factor(dt_nnet$treat)
-
-nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout = F, maxit=200)
-dt$psc_nn = as.numeric(predict(nn_mod))
-confusionMatrix(ifelse(dt$psc_nn>0.5,1,0), dt$treat)
+confusionMatrix(factor(ifelse(dt$psc_probit>0.5,1,0)), factor(dt$treat))
 ```
 
-```{r Q5.ii}
+```{r Q5.probit.i}
+# Model 3: Probit with interactions
+ps.m3 <- glm(treat ~ .^2, data=dt[, c('treat', confounders)], family=binomial(link='probit'))
+summary(ps.m3)
+dt$psc_full <- ps.m3$fitted.values
+confusionMatrix(factor(ifelse(dt$psc_full>0.5,1,0)), factor(dt$treat))
+```
+
+```{r Q5.randomForest}
+# Model 4: Random Forest
+m.rf = randomForest(as.factor(treat) ~ ., data=dt[, c('treat', confounders)], ntree = 10)
+dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
+confusionMatrix(factor(ifelse(dt$psc_rf>0.5,1,0)), factor(dt$treat))
+```
+
+```{r Q5.neuralNet}
+# Model 5: Neural Net
+dt_nnet = as.data.frame(dt[, c('treat', confounders)])
+dt_nnet[, which(sapply(dt_nnet, class)=="numeric")] = scale(dt_nnet[, which(sapply(dt_nnet, class)=="numeric")])
+dt_nnet$treat = as.factor(dt_nnet$treat)
+
+nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout=FALSE, maxit=200)
+dt$psc_nn = as.numeric(predict(nn_mod))
+confusionMatrix(factor(ifelse(dt$psc_nn>0.5,1,0)), factor(dt$treat))
+```
+
+```{r Q5.mahalanobis}
 # Mahalanobis Distance
-myMH = function(trtnms, ctrnms, inv.cov, data){
+myMH = function(trtnms, ctrnms, inv.cov, df) {
     # Helper function: calculates mahalanobis distance between a pair of treated and control observations
     covars <- dimnames(inv.cov)[[1]]
-    xdiffs <-as.matrix(data[trtnms, covars]) - as.matrix(data[ctrnms, covars])
+    xdiffs <-as.matrix(df[trtnms, covars]) - as.matrix(df[ctrnms, covars])
     sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
 }
 
 mahaloMahalanobis = function(df, confounders) {
     # Calculate mahalanobis distance for all treated X control pairs
-    inv_cov_mat = solve(cov(df[, confounders]))
+    inv_cov_mat = solve(cov(df[, confounders]), tol=1e-24)
     treated = row.names(df[df$treat==1,])
     controls = row.names(df[df$treat==0,])
     return( outer(treated, controls, FUN=myMH, inv.cov=inv_cov_mat, data=df) )
 }
 
-matchMahalanobis = function(mahalanobisDist, data) {
-    # Find nearest neighbor given mahalanobis distance matrix; return weight counts
+matchMahalanobis = function(mhDistMat, df) {
+    # Return 'cnts' for controls for Mahalanobis 1-1 matching with replacement
     
-    treat.idx = as.integer(row.names(data[data$treat==1,]))
-    ctrl.idx = as.integer(row.names(data[data$treat==0,]))
-    # Find matched pairs
-    matches = apply(mahaloDist, 1, function(d) min(which(d == min(d))))
-    match.results = data.frame(trt.idx=treat.idx,
-        ctr.idx=matches + length(treat.idx))
-    # Count match weights for controls
-    counts = as.data.frame(tapply(match.results$ctr.idx, match.results$ctr.idx, length))
-    # Append unmatched controls
-    ctrls = as.integer(row.names(data[data$treat==0,]))
-    rows = ctrls[!(ctrls %in% row.names(counts))]
-
-    which(!(row.names(data[data$treat==0,]) %in% as.integer(row.names(counts)))]
-    unmatched = data.frame()
-    return(counts)
+    controls = data.frame(ctrl=seq(nrow(df[df$treat==0,])))
+    # For each treated find matched control
+    matched = apply(mhDistMat, 1, function(i) min(which(i==min(i))))
+    matched.count <- data.frame(table(matched))
+    matches = merge(controls, matched.count, by.x='ctrl', by.y='matched', all.x=TRUE)
+    matches[is.na(matches$Freq), 'Freq'] <- 0
+    return(matches[['Freq']])
 }
 
+# Calculate mahalanobis distance matrix
 mahalanobisDist = mahaloMahalanobis(dt, confounders)
-dt[dt$treat==0, 'w.mh'] = matchMahalanobis(mahalanobisDist)
-dt[dt$treat==1, 'w.mh'] = 1
-# Find nearest neighbor using mahalanobis distance
-matches <- apply(mahalanobisDist, 1, function(x) min(which(x == min(x))))
-match_results <- data.frame(trt.idx=seq(1,290), ctr.idx=matches+290))
-
-counts <- match_results %>% 
-    group_by(ctr.idx) %>%
-    dplyr::summarize(w_mahalo=n())
-
-dt_mahalo_2 <- dt_mahalo %>%
-    mutate(id = as.integer(rownames(dt_mahalo))) %>%
-    left_join(counts, by=c("id" = "ctr.idx")) %>%
-    mutate(w_mahalo=treat + ifelse(is.na(w_mahalo), 0, w_mahalo))
-
-dt$w_mahalo = dt_mahalo_2$w_mahalo
-
-# Check against MatchIt function  
-df <- dt[, c('treat', confounders)]
-zz <- matchit(treat ~ momed + booze + bw + bwg + preterm + black + white + dayskidh, data=df, method="nearest", 
-              distance="mahalanobis", replace=TRUE)
-zz.out = zz$match.matrix
-sum(match_results$ctr.idx == zz.out)
+# 1-1 matching with replacement
+dt[dt$treat==0, 'wt.mh'] = matchMahalanobis(mahalanobisDist, dt)
+dt[dt$treat==1, 'wt.mh'] = 1
 ```
 
 ```{r Q5.iii}
