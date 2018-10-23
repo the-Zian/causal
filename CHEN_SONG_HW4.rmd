@@ -60,11 +60,6 @@ confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
 # Remove post-treatment variables
 confounders <- confounders[!(confounders %in% c('dayskidh', 'income'))]
 
-# St99: indicator for whether family was living in state served by the ihdp
-# Also, all subjects with St99=1 were in control
-apply(hw4[hw4$treat==1,],2,sum)
-confounders <- confounders[!(confounders %in% c('st99'))]
-
 # Don't need Black, Hispanic, AND White
 confounders <- confounders[!(confounders %in% c('white'))]
 
@@ -87,7 +82,6 @@ As confounders, we selected covariates that have correlation > 0.03 with treatme
 
 We excluded post-treatment variables: "dayskidh" and "income" (We determined these are post-treatment because subjects were recruited to the intervention at the time of birth. These two covariates are measured after birth). 
 
-We excluded 'st99' because all subjects with St99 = 1 were in the control group.
 
 #### Selected confounders:  
 
@@ -167,9 +161,11 @@ examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score',
 # Overlap of propensity score
 examine_overlap(dt, nbins=40, var='psc', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-10,10))
 # Overlap of preterm
-examine_overlap(dt, nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-100,150))
+examine_overlap(dt, nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-50,50))
 # Overlap of birth weight
 examine_overlap(dt, nbins=20, var='bw', var_name='Birth weight', xlab='Birth weight', ylim=c(-50,200))
+# Overlap of birth weight
+examine_overlap(dt, nbins=20, var='momage', var_name='Birth weight', xlab='Birth weight', ylim=c(-50,100))
 ```
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
@@ -252,9 +248,11 @@ ps.m1.bal <- checkBalance(df=dt, confounders=confounders, wt_var='wt')
 round(ps.m1.bal,2)
 ```
 
+
+
 ```{r Q4d plot}
 # Plot standardized mean Differences
-plotMeanDiff = function(balance_object){
+plotMeanDiff = function(balance_object, name){
   df = data.frame(balance_object[,c(5,6)])
   df$var = as.factor(row.names(df))
   colnames(df) = c('unmatched','matched','var')
@@ -262,10 +260,30 @@ plotMeanDiff = function(balance_object){
   ggplot(df, aes(x = value, y = var, shape = variable, color = variable)) + 
     geom_point() + 
     geom_vline(xintercept=0, color='blue') + 
-    labs(x = 'Standardized Difference in Means', y = 'predictor')
+    geom_vline(xintercept=-.05, color='orange', linetype='dotted') + 
+    geom_vline(xintercept=.05, color='orange', linetype='dotted') + 
+    geom_vline(xintercept=-.1, color='red', linetype='dotted') + 
+    geom_vline(xintercept=.1, color='red', linetype='dotted') + 
+    coord_cartesian(xlim=c(-0.5,0.5)) +
+    labs(x = 'Standardized Difference in Means', y = 'predictor', title = name,
+         caption='Orange dotted line indicates +/-0.05 bounds and red lines indicate +/-0.1 bounds.\n Values outside of range x=[-0.5,0.5] not displayed.') 
 }
 
-plotMeanDiff(ps.m1.bal)
+# Plot Ratios of Standard Deviations
+plotSDRatios = function(balance_object,name){
+  df = data.frame(balance_object[,c(7,8)])
+  df = df[!is.na(df)[,1],]
+  df$var = as.factor(row.names(df))
+  colnames(df) = c('unmatched','matched','var')
+  df = melt(df)
+  ggplot(df, aes(x = value, y = var, shape = variable, color = variable)) + 
+    geom_point() + 
+    geom_vline(xintercept=1, color='blue') + 
+    labs(x = 'Ratios of Standard Deviations', y = 'predictor', title=name)
+}
+
+plotMeanDiff(ps.m1.bal, 'Propensity Score Model: Logistic Regression')
+plotSDRatios(ps.m1.bal, 'Propensity Score Model: Logistic Regression')
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
@@ -297,66 +315,69 @@ round(checkBalance(temp, c('bw', 'b.marr'), 'wt'),3)
 ## Question 5: Repeat steps 2-4 within the matching framework.
 
 \texttt{ANSWER:}
+
+We use the following propensity score models to try to achieve better balance:  
+- Probit regression  
+
+We use the following matching methods to try to achieve better balance.
+- Mahalonobis Distance Matching
+- Matching without Replacement (Using propensity scores from original logistic regression)  
+- Nearest Neighbor Matching with Replacement
+
+Brief descriptions of each of the methods:
+
+(1) Probit Regression
+
+A probit regression is equivalent to the logistic regression except that it replaces the logistic with the normal distribution. So:
+
+$$Pr(y_{i} = 1) = \Phi(X_{i}B)$$
+where $\Phi$ is the normal cumulative distribution function. There is strong overlap between the control and treatment distributions over the propensity score so no observations were dropped. We using matching with replacement 
+
+(2) Mahalanobis Matching
+
+Mahalanobis matching uses a distance measure in multivariate space that takes into account variances of variables as well as covariances between them. 
+
+(3) Matching without Replacement (Using propensity scores from original logistic regression)
+
+We use the original propensity scores Q2. This time, we match without replacement.
+
+(4) Nearest Neighbor Matching with Replacement
+
+We use K-closest matching with k = 2. This matching method selects the 2 control subjects with the closest distance to the treated subject (using default=logit). Matches are chosen for treatment subjects one at a time using the default order (largest to smallest). We allow for replacement.
+
+
+
+
 Fit new propensity score models:
+
 ```{r Q5.probit}
 # Model 2: Probit
 ps.m2 <- glm(treat ~ ., data=dt[, c('treat', confounders)], family=binomial(link='probit'))
-summary(ps.m2)
 dt$psc_probit <- ps.m2$fitted.values
 confusionMatrix(factor(ifelse(dt$psc_probit>0.5,1,0)), factor(dt$treat))
 ```
 
-```{r Q5.probit.i}
-# Model 3: Probit with interactions
-ps.m3 <- glm(treat ~ .^2, data=dt[, c('treat', confounders)], family=binomial(link='probit'))
-summary(ps.m3)
-dt$psc_full <- ps.m3$fitted.values
-confusionMatrix(factor(ifelse(dt$psc_full>0.5,1,0)), factor(dt$treat))
-```
-
-
-```{r Q5.randomForest}
-# Model 4: Random Forest
-m.rf = randomForest(as.factor(treat) ~ ., data=dt[, c('treat', confounders)], ntree = 10)
-dt$psc_rf = predict(m.rf, dt, type="prob")[,2]
-confusionMatrix(factor(ifelse(dt$psc_rf>0.5,1,0)), factor(dt$treat))
-```
-
-```{r Q5.neuralNet}
-# Model 5: Neural Net
-dt_nnet = as.data.frame(dt[, c('treat', confounders)])
-dt_nnet[, which(sapply(dt_nnet, class)=="numeric")] = scale(dt_nnet[, which(sapply(dt_nnet, class)=="numeric")])
-dt_nnet$treat = as.factor(dt_nnet$treat)
-
-nn_mod = nnet(treat ~ ., data=dt_nnet, size=12, linout=FALSE, maxit=500, decay=0.1)
-dt$psc_nn = as.numeric(predict(nn_mod))
-confusionMatrix(factor(ifelse(dt$psc_nn>0.5,1,0)), factor(dt$treat))
-```
-
 Matching with new models:
-```{r Q5.match}
-# Matches
+
+```{r Q5 matching}
+# Rematching
+
+# Probit
 matches <- matching(z=dt$treat, score=dt$psc_probit, replace=TRUE)
-dt[dt$treat==1, 'wt.probit'] <- 1
-dt[dt$treat==0, 'wt.probit'] <- matches$cnt
+dt[dt$treat==1, 'w_probit'] <- 1
+dt[dt$treat==0, 'w_probit'] <- matches$cnt
 
-matches <- matching(z=dt$treat, score=dt$psc_full, replace=TRUE)
-dt[dt$treat==1, 'wt.full'] <- 1
-dt[dt$treat==0, 'wt.full'] <- matches$cnts
-
-matches <- matching(z=dt$treat, score=dt$psc_rf, replace=TRUE)
-dt[dt$treat==1, 'wt.rf'] <- 1
-dt[dt$treat==0, 'wt.rf'] <- matches$cnts
-
-matches <- matching(z=dt$treat, score=dt$psc_nn, replace=TRUE)
-dt[dt$treat==1, 'wt.nn'] <- 1
-dt[dt$treat==0, 'wt.nn'] <- matches$cnts
+# Matching without Replacement using Original Logit Model
+matches_nr <- matching(z=dt$treat, score=dt$psc, replace=FALSE)
+matches_nr_idx <- c(which(dt$treat==1), 
+                    matches_nr$matched[1:290])
+dt[matches_nr_idx, 'w_logit_no_rep'] = 1
+dt$w_logit_no_rep[is.na(dt$w_logit_no_rep)] = 0
 ```
-
 
 Calculate the Mahalanobis distance for matching:
 
-$$d(x,y) =  \sqrt{(x - y)^T S^{-1} (x-y)} $$
+$$d(x,y) =  \sqrt{(x - y)^T S^{-1} (x-y)}$$
 
 We constructed our own Mahalonobis Distance function. As shown below, it gets the same results as the MatchIt package. 
 
@@ -385,7 +406,7 @@ ctr.idx = data.frame(idx=seq(1:sum(dt$treat==0)))
 matches = merge(ctr.idx,m_freq,by.x='idx',by.y='matches',all.x=T)
 
 # Set Weights
-dt[dt$treat==0,'wt.mh'] = matches$Freq
+dt[dt$treat==0,'wt.mh'] = matches$Freq*0.5241379
 dt$wt.mh[is.na(dt$wt.mh)] = 0
 dt[dt$treat==1,'wt.mh'] = 1
 ```
@@ -396,63 +417,41 @@ df = dt[,c('treat',confounders)]
 zz <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm + black + hispanic + lths + hs + college + st9 + st25 + st42, data=df, method="nearest",
               distance="mahalanobis", replace=TRUE)
 
-# Check control subject ID of our Mahalanobis matches to the MatchIt matches
-my_ctrl_idx = row.names(dt[dt$treat==0 & dt$wt.mh>0,])
-matchIt_ctrl_idx = zz$match.matrix
-
-my_ctrl_idx %in% matchIt_ctrl_idx 
+# Check weights derived from our Mahalanobis matches to the MatchIt matches
+cbind(dt$wt.mh[291:310],zz$weights[291:310])
 ```
 
-
-```{r Q5 matching}
-# Rematching
-
-# Probit
-matches <- matching(z=dt$treat, score=dt$psc_probit, replace=TRUE)
-dt[dt$treat==1, 'w_probit'] <- 1
-dt[dt$treat==0, 'w_probit'] <- matches$cnt
-
-# Probit with Interactions
-matches <- matching(z=dt$treat, score=dt$psc_full, replace=TRUE)
-dt[dt$treat==1, 'w_full'] <- 1
-dt[dt$treat==0, 'w_full'] <- matches$cnts
-
-# Matching without Replacement using Original Logit Model
-matches_nr <- matching(z=dt$treat, score=dt$psc, replace=FALSE)
-matches_nr_idx <- c(which(dt$treat==1), 
-                    matches_nr$matched[1:290])
-dt[matches_nr_idx, 'w_logit_no_rep'] = 1
-
-# Random Forest
-matches <- matching(z=dt$treat, score=dt$psc_rf, replace=TRUE)
-dt[dt$treat==1, 'w_rf'] <- 1
-dt[dt$treat==0, 'w_rf'] <- matches$cnts
-
-# Neural net
-matches <- matching(z=dt$treat, score=dt$psc_nn, replace=TRUE)
-dt[dt$treat==1, 'w_nn'] <- 1
-dt[dt$treat==0, 'w_nn'] <- matches$cnts
+K-2 Matching with Replacement:
+```{r}
+# Check against MatchIt function  
+df = dt[,c('treat',confounders)]
+k2 <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm + black + hispanic + lths + hs + college + st9 + st25 + st42, data=df, method="nearest",
+              ratio=2, replace=T)
+dt$wt_k2 = k2$weights
 ```
+
 
 Check overlap and balance:
 
 ```{r Q5 check balance}
-# OVERLAP
-# Paired, inverted histograms: propensity scores
-nbins <- 40
-examine_overlap(dt,40,var='psc_probit',var_name='Propensity Score (Probit Model)',ylim=c(-30,50),xlab='Propensity Score')
-examine_overlap(dt,40,var='psc_full',var_name='Propensity Score (Probit Full Model)',ylim=c(-30,50),xlab='Propensity Score')
-examine_overlap(dt,40,var='psc_rf',var_name='Propensity Score (RF Model)',ylim=c(-30,50),xlab='Propensity Score')
-examine_overlap(dt,40,var='psc_nn',var_name='Propensity Score (NN Model)',ylim=c(-30,50),xlab='Propensity Score')
+plotMeanDiff(checkBalance(dt, confounders, 'wt'), 'Propensity Score Model: Logistic Regression')  
+plotMeanDiff(checkBalance(dt, confounders, 'w_probit'), 'Propensity Score Model: Probit Regression')  
+plotMeanDiff(checkBalance(dt, confounders, 'w_logit_no_rep'), 'Matching Method: Logistic w/o Replacement')  
+plotMeanDiff(checkBalance(dt, confounders, 'wt.mh'), 'Matching Method: Mahalanobis')
+plotMeanDiff(checkBalance(dt, confounders, 'wt_k2'), 'Matching Method: Nearest Neighbor (k=2)')
 
+# Plot SD Ratios
+temp = rbind(
+  checkBalance(dt, confounders, 'wt'),
+  checkBalance(dt, confounders, 'w_probit'),
+  checkBalance(dt, confounders, 'w_logit_no_rep'),
+  checkBalance(dt, confounders, 'wt.mh'),
+  checkBalance(dt, confounders, 'wt_k2')
+)
 
-plotMeanDiff(checkBalance(dt, confounders, 'wt'))  
-plotMeanDiff(checkBalance(dt, confounders, 'w_probit'))  
-plotMeanDiff(checkBalance(dt, confounders, 'w_full'))  
-plotMeanDiff(checkBalance(dt, confounders, 'w_logit_no_rep'))  
-plotMeanDiff(checkBalance(dt, confounders, 'w_rf'))  
-plotMeanDiff(checkBalance(dt, confounders, 'w_nn'))  
-plotMeanDiff(checkBalance(dt, confounders, 'wt.mh'))  
+temp = temp[order(rownames(temp)),]
+row.names(temp) = paste(row.names(temp),rep(c('logit','probit','logit_no_replace','mahalanobis','neighbor'),times=15),sep='_')
+plotSDRatios(temp, 'Comparing SD Ratios of All Propensity Score Models\n and Matching Methods Used')
 ```
 
 
