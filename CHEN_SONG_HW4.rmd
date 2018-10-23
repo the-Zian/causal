@@ -68,11 +68,6 @@ confounders <- confounders[!(confounders %in% c('st99'))]
 # Don't need Black, Hispanic, AND White
 confounders <- confounders[!(confounders %in% c('white'))]
 
-# Replace momed with dummy variables
-if ('momed' %in% confounders) {
-    confounders <- c(confounders[!(confounders %in% 'momed')], c('lths', 'hs', 'ltcoll', 'college'))
-}
-
 # Subset data for analysis:
 #  (a) Reduce data frame to include only observations for children whose b.w. < 3000 g
 #  (b) Include outcome, treatment indicator, and selected covariates
@@ -132,13 +127,6 @@ plot(dt$psc)
 
 \texttt{ANSWER:}  
 The research question of interest focuses on the effect of the intervention on the children that participated in it. Since we are interested on the effect of those who received treatment, the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
-
-#####################################################  
-Alan, wanted for you to see why your response below is unclear. You describe the target of the intervention then state, "thus estimand of interest is ATT". But the research question is independent of the target of the intervention. For example, the research question could be interested in what the effect of the intervention would be on the average American, even though the intervention itself targeted premature children.
-
-## 
-The IHDP intervention targeted children that were born premature and with low birth weight, thus the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
-#####################################################  
 
 
 - (b) First please perform *one-to-one nearest neighbor matching with replacement* using your estimated propensity score from Question 2. Perform this matching using the `matching` command in the arm package. The *"cnts"* variable in the output reflects the number of times each control observation was used as a match (the length is equal to the number of control observations). Use the output of this function to create a weight variable that  
@@ -375,6 +363,7 @@ matches = merge(ctr.idx,m_freq,by.x='idx',by.y='matches',all.x=T)
 
 # Set Weights
 dt[dt$treat==0,'wt.mh'] = matches$Freq
+dt$wt.mh[is.na(dt$wt.mh)] = 0
 dt[dt$treat==1,'wt.mh'] = 1
 ```
 
