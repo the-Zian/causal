@@ -28,6 +28,8 @@ library(nnet)
 library(dplyr)
 library(MatchIt)
 library(reshape2)
+library(knitr)
+library(kableExtra)
 
 rm(list=ls())
 # Set global ggplot theme
@@ -108,7 +110,6 @@ Mother:
 ```{r Q2}
 ps.m1 <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='logit'))
 dt$psc <- ps.m1$fitted.values
-plot(dt$psc)
 ```
 
 
@@ -463,32 +464,21 @@ plotSDRatios(temp, 'Comparing SD Ratios of All Propensity Score Models\n and Mat
 ## Question 6: Repeat steps 2-4, but this time using IPTW.
 
 \texttt{ANSWER:}
-```{r Q6}
-# Code for Estimating the Propensity Score
-ps.iptw <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='logit'))
-dt$psc_iptw <- ps.iptw$fitted.values
 
-# Code for Creating the IPTW Weights
-dt[dt$treat==1, 'wt.iptw'] <- 1
-dt[dt$treat==0, 'wt.iptw'] <- dt[dt$treat==0, 'ps.iptw'] / (1 - dt[dt$treat==0, 'ps.iptw'])
+```{r Q2}
+ps.IPTW <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='logit'))
+dt$psc_iptw <- ps.IPTW$fitted.values
 ```
-
-For estimating the ATE, define the weight as follows:
-$$\omega(Z,x) = \frac{Z}{\hat{\epsilon}(x)} + \frac{(1-Z)}{1-\hat{\epsilon(x)}}$$
-```{r Q6.i}
-r_ate = dt$treat/dt$psc + (1-dt$treat)/(1-dt$psc)
-```
-
 
 For estimating the ATT, define the weight as follows:
+
 $$\omega(Z,x) = Z + (1-Z) * \frac{\hat{\epsilon}(x)}{1-\hat{\epsilon}(x)}$$
 ```{r Q6.ii}
-r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
+dt$r_att = dt$psc + (1-dt$treat) * dt$psc / (1-dt$psc)
 ```
 
 ```{r Q6.iii}
-iptw.balance <- checkBalance(dt, confounders, r_att)
-iptw.balance
+iptw.balance <- checkBalance(dt, confounders, 'r_att')
 ```
 
 
@@ -521,8 +511,8 @@ compareBalance <- function(model_bals, model_names, col) {
     return(out)
 }
 
-model_bals <- list(logit.bal, probit.bal, logit_nr.bal, mh.bal, mk2.bal)
-model_names <- c('Logistic', 'Probit', 'Logistic (no replacement)', 'Mahalanobis Matching', 'K=2 Nearest Neighbors')
+model_bals <- list(logit.bal, probit.bal, logit_nr.bal, mh.bal, mk2.bal, iptw.balance)
+model_names <- c('Logistic', 'Probit', 'Logistic (no replacement)', 'Mahalanobis Matching', 'K=2 Nearest Neighbors', 'IPTW')
 ```
 
 `r compareBalance(model_bals, model_names, 6)`
