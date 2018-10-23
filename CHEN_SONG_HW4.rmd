@@ -333,7 +333,6 @@ dt$psc_nn = as.numeric(predict(nn_mod))
 confusionMatrix(factor(ifelse(dt$psc_nn>0.5,1,0)), factor(dt$treat))
 ```
 
-<<<<<<< HEAD
 Matching with new models:
 ```{r Q5.match}
 # Matches
@@ -353,17 +352,9 @@ matches <- matching(z=dt$treat, score=dt$psc_nn, replace=TRUE)
 dt[dt$treat==1, 'wt.nn'] <- 1
 dt[dt$treat==0, 'wt.nn'] <- matches$cnts
 ```
+
+
 Calculate the Mahalanobis distance for matching:
-```{r Q5.mahalanobis}
-# Mahalanobis Distance
-myMH = function(trtnms, ctrnms, inv.cov, df) {
-    # Helper function: calculates mahalanobis distance between a pair of treated and control observations
-    covars <- dimnames(inv.cov)[[1]]
-    xdiffs <-as.matrix(df[trtnms, covars]) - as.matrix(df[ctrnms, covars])
-    sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
-}
-=======
->>>>>>> 3f201f53c0794d8bf248d548150c17b1e7335f4d
 
 $$d(x,y) =  \sqrt{(x - y)^T S^{-1} (x-y)} $$
 
@@ -398,24 +389,6 @@ dt[dt$treat==0,'wt.mh'] = matches$Freq
 dt$wt.mh[is.na(dt$wt.mh)] = 0
 dt[dt$treat==1,'wt.mh'] = 1
 ```
-
-<<<<<<< HEAD
-Check overlap and balance:
-```{r Q5.overlap}
-# OVERLAP
-# Paired, inverted histograms: propensity scores
-examine_overlap(dt, 40, var='psc_probit', var_name='Propensity Score (Probit Model)', xlab='Propensity Score', ylim=c(-30,50))
-examine_overlap(dt, 40, var='psc_full', var_name='Propensity Score (Probit Full Model)', xlab='Propensity Score', ylim=c(-30,50))
-examine_overlap(dt, 40, var='psc_rf', var_name='Propensity Score (Random Forest Model)', xlab='Propensity Score', ylim=c(-30,50))
-examine_overlap(dt, 40, var='psc_nn', var_name='Propensity Score (Neural Net Model)', xlab='Propensity Score', ylim=c(-30,50))
-
-m1.bal = checkBalance(dt, confounders, 'wt')
-probit.bal = checkBalance(dt, confounders, 'wt.probit')
-full.bal = checkBalance(dt, confounders, 'wt.full')
-rf.bal = checkBalance(dt, confounders, 'wt.rf')
-nn.bal = checkBalance(dt, confounders, 'wt.nn')
-mh.bal = checkBalance(dt, confounders, 'wt.mh')
-=======
 
 ```{r}
 # Check against MatchIt function  
@@ -461,6 +434,7 @@ dt[dt$treat==1, 'w_nn'] <- 1
 dt[dt$treat==0, 'w_nn'] <- matches$cnts
 ```
 
+Check overlap and balance:
 
 ```{r Q5 check balance}
 # OVERLAP
@@ -479,8 +453,6 @@ plotMeanDiff(checkBalance(dt, confounders, 'w_logit_no_rep'))
 plotMeanDiff(checkBalance(dt, confounders, 'w_rf'))  
 plotMeanDiff(checkBalance(dt, confounders, 'w_nn'))  
 plotMeanDiff(checkBalance(dt, confounders, 'wt.mh'))  
-
->>>>>>> 3f201f53c0794d8bf248d548150c17b1e7335f4d
 ```
 
 
