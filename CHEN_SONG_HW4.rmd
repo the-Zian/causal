@@ -393,45 +393,6 @@ my_ctrl_idx %in% matchIt_ctrl_idx
 ```
 
 
-
-
-
-```{r Q5.mahalanobis}
-# Mahalanobis Distance
-myMH = function(trtnms, ctrnms, inv.cov, df) {
-    # Helper function: calculates mahalanobis distance between a pair of treated and control observations
-    covars <- dimnames(inv.cov)[[1]]
-    xdiffs <-as.matrix(df[trtnms, covars]) - as.matrix(df[ctrnms, covars])
-    sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
-}
-
-mahaloMahalanobis = function(df, confounders) {
-    # Calculate mahalanobis distance for all treated X control pairs
-    inv_cov_mat = solve(cov(df[, confounders]), tol=1e-24)
-    treated = row.names(df[df$treat==1,])
-    controls = row.names(df[df$treat==0,])
-    return( outer(treated, controls, FUN=myMH, inv.cov=inv_cov_mat, data=df) )
-}
-
-matchMahalanobis = function(mhDistMat, df) {
-    # Return 'cnts' for controls for Mahalanobis 1-1 matching with replacement
-    
-    controls = data.frame(ctrl=seq(nrow(df[df$treat==0,])))
-    # For each treated find matched control
-    matched = apply(mhDistMat, 1, function(i) min(which(i==min(i))))
-    matched.count <- data.frame(table(matched))
-    matches = merge(controls, matched.count, by.x='ctrl', by.y='matched', all.x=TRUE)
-    matches[is.na(matches$Freq), 'Freq'] <- 0
-    return(matches[['Freq']])
-}
-
-# Calculate mahalanobis distance matrix
-mahalanobisDist = mahaloMahalanobis(dt, confounders)
-# 1-1 matching with replacement
-dt[dt$treat==0, 'wt.mh'] = matchMahalanobis(mahalanobisDist, dt)
-dt[dt$treat==1, 'wt.mh'] = 1
-```
-
 ```{r Q5 matching}
 # Rematching
 
