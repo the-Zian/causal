@@ -27,6 +27,7 @@ library(randomForest)
 library(nnet)
 library(dplyr)
 library(MatchIt)
+library(reshape2)
 
 rm(list=ls())
 # Set global ggplot theme
@@ -53,19 +54,64 @@ load('data/hw4.rdata')
 # Pick confounders based on correlation to treatment and outcome variables
 corr_mat <- cor(hw4)
 corr_mat <- rbind(corr_mat['treat',], corr_mat['ppvtr.36',])
-confounders <- names(which((abs(corr_mat[1,]) > 0.3) + (abs(corr_mat[2,]) > 0.3) > 0))
+confounders <- names(which((abs(corr_mat[1,]) > 0.03) * (abs(corr_mat[2,]) > 0.02) > 0))
 confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
+
 # Remove post-treatment variables
 confounders <- confounders[!(confounders %in% c('dayskidh', 'income'))]
+
+# St99: indicator for whether family was living in state served by the ihdp
+# Also, all subjects with St99=1 were in control
+apply(hw4[hw4$treat==1,],2,sum)
+confounders <- confounders[!(confounders %in% c('st99'))]
+
+# Don't need Black, Hispanic, AND White
+confounders <- confounders[!(confounders %in% c('white'))]
+
 # Replace momed with dummy variables
 if ('momed' %in% confounders) {
     confounders <- c(confounders[!(confounders %in% 'momed')], c('lths', 'hs', 'ltcoll', 'college'))
 }
 
-# Subset data for analysis
+# Subset data for analysis:
+#  (a) Reduce data frame to include only observations for children whose b.w. < 3000 g
+#  (b) Include outcome, treatment indicator, and selected covariates
 dt <- hw4[hw4$bw<3000, c('ppvtr.36', 'treat', confounders)]
 ```
 
+```{r Q1 answers}
+# New data frame with outcome in 1st column, treatment indicator in 2nd column
+# and covariates in the remaining columns
+head(dt)
+
+# List of the variable names for the confounder variables chosen
+colnames(dt)[3:length(dt)]
+```
+
+As confounders, we selected covariates that have correlation > 0.03 with treatment and correlation > 0.02 with outcome. We also used Chapter 18 of Gelman and Hill as reference (p. 358 "a set of confounding covariates wthat we think predict both program participation and subsequent test scores"). Our list of confounders is mostly similar. Compared to the text, our list excludes "days in hospital", "sex", "child's age", "some college", "work during pregnancy", "white" and includes "booze" and state indicators. 
+
+We excluded post-treatment variables: "dayskidh" and "income" (We determined these are post-treatment because subjects were recruited to the intervention at the time of birth. These two covariates are measured after birth). 
+
+We excluded 'st99' because all subjects with St99 = 1 were in the control group.
+
+#### Selected confounders:  
+
+Child:
+- child's birth weight (bw)
+- number of weeks preterm child was born (preterm)
+- indicator for whether child was born male or female (first)
+
+Mother:
+- mom age at time of birth(momage)
+- indicator for whether mom was married at birth (b.marr)
+- indicator for whether mom received prenatal care (prenatal)
+- indicator for wehther mom drank alcohol while pregnant (booze)
+- indicators for child's race/ethnicity (black, hispanic)
+- indicators for mother's education at time of birth (lths, hs, college)
+- indicator for state where household resides (st9, st25, st42)
+
+
+***
 
 ## Question 2: Estimate the propensity score (Step 2)
 
@@ -77,15 +123,27 @@ plot(dt$psc)
 ```
 
 
+
+***
+
 ## Question 3: Restructure your data through matching. [Or at least create the weights variable that will let you to do so in the following steps] (Step 3)
 
 - (a) The first thing you need to be clear on before restructuring your data is the estimand. Given the description above about the research question, what is the estimand of interest?  
+
+\texttt{ANSWER:}  
+The research question of interest focuses on the effect of the intervention on the children that participated in it. Since we are interested on the effect of those who received treatment, the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
+
+#####################################################  
+Alan, wanted for you to see why your response below is unclear. You describe the target of the intervention then state, "thus estimand of interest is ATT". But the research question is independent of the target of the intervention. For example, the research question could be interested in what the effect of the intervention would be on the average American, even though the intervention itself targeted premature children.
+
+## 
+The IHDP intervention targeted children that were born premature and with low birth weight, thus the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
+#####################################################  
+
+
 - (b) First please perform *one-to-one nearest neighbor matching with replacement* using your estimated propensity score from Question 2. Perform this matching using the `matching` command in the arm package. The *"cnts"* variable in the output reflects the number of times each control observation was used as a match (the length is equal to the number of control observations). Use the output of this function to create a weight variable that  
 - 1) equals one for treated observations and  
 - 2) equals the number of times used as a match for non- treated observations.  
-
-\texttt{ANSWER:}  
-The IHDP intervention targeted children that were born premature and with low birth weight, thus the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
 
 ```{r Q3}
 matches <- matching(z=dt$treat, score=dt$psc, replace=TRUE)
@@ -93,6 +151,9 @@ dt[dt$treat==0, 'wt'] <- matches$cnts
 dt[dt$treat==1, 'wt'] <- 1
 ```
 
+
+
+***
 
 ## Question 4: Check overlap and balance. (Step 4)
 
@@ -116,7 +177,7 @@ examine_overlap = function(dt, nbins=40, var='psc', var_name='Propensity Score',
 }
 
 # Overlap of propensity score
-examine_overlap(dt, nbins=40, var='psc', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-30,50))
+examine_overlap(dt, nbins=40, var='psc', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-10,10))
 # Overlap of preterm
 examine_overlap(dt, nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-100,150))
 # Overlap of birth weight
@@ -125,8 +186,12 @@ examine_overlap(dt, nbins=20, var='bw', var_name='Birth weight', xlab='Birth wei
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
 
+
 \texttt{ANSWER:}  
+
+#####################################################  
 Since our estimand of interest is the \texttt{ATT}, we need similar observations from the control group to use as our counterfactuals for the treatment group. The plots above show sufficient overlap (relative to the treated) between the two groups in propensity scores, number of weeks the baby was born preterm, child's birth weight, and days child was in hospital after birth.
+#####################################################  
 
 ### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
 
@@ -141,7 +206,7 @@ Since our estimand of interest is the \texttt{ATT}, we need similar observations
 
 \texttt{ANSWER:}
 ```{r Q4c}
-checkBalance = function(df, confounders, wt_var, digits=3) {
+checkBalance = function(df, confounders, wt_var) {
 
     # Subset data to confounders only
     df2 <- df[, confounders]
@@ -185,7 +250,7 @@ checkBalance = function(df, confounders, wt_var, digits=3) {
     # Return results
     result = cbind(trt.means, ctr.means, trt.means, ctr.means_w, diff, diff.m, ratio, ratio.m)
     colnames(result) = c('mn1', 'mn0', 'mn1.m', 'mn0.m', 'diff', 'diff.m', 'ratio', 'ratio.m')
-    return(round(result, digits))
+    return(result)
 }
 ```
 
@@ -194,7 +259,25 @@ checkBalance = function(df, confounders, wt_var, digits=3) {
 \texttt{ANSWER:}
 ```{r Q4d}
 ps.m1.bal <- checkBalance(df=dt, confounders=confounders, wt_var='wt')
-ps.m1.bal
+
+# Rounded to two decimal places
+round(ps.m1.bal,2)
+```
+
+```{r Q4d plot}
+# Plot standardized mean Differences
+plotMeanDiff = function(balance_object){
+  df = data.frame(balance_object[,c(5,6)])
+  df$var = as.factor(row.names(df))
+  colnames(df) = c('unmatched','matched','var')
+  df = melt(df)
+  ggplot(df, aes(x = value, y = var, shape = variable, color = variable)) + 
+    geom_point() + 
+    geom_vline(xintercept=0, color='blue') + 
+    labs(x = 'Standardized Difference in Means', y = 'predictor')
+}
+
+plotMeanDiff(ps.m1.bal)
 ```
 
 ### (e) Unit test. Show the results of your balance function on a simple example with the same sample as above (that is, limited to children with birth weight less than 3000) where the propensity score is fit using logistic regression on “bw” and “b.marr” and the matching is performed using 1-1 nearest neighbor matching with replacement. The output of your balance function should match the following (when rounded to 3 decimal places):
@@ -203,18 +286,25 @@ ps.m1.bal
 ```{r Q4e}
 # Subset data
 temp <- hw4[hw4$bw<3000, c('treat', 'bw', 'b.marr')]
+
 # Fit propensity score model (logistic)
 ps.temp <- glm(treat ~ bw + b.marr, data=temp, family=binomial(link='logit'))
+
 # Generate propensities scores
 temp$psc <- ps.temp$fitted.values
+
 # 1-1 nearest neighbor matching with replacement
 ps.temp.matches <- matching(z=temp$treat, score=temp$psc, replace=TRUE)
 temp[temp$treat==0, 'wt'] <- ps.temp.matches$cnts
 temp[temp$treat==1, 'wt'] <- 1
 
-checkBalance(temp, c('bw', 'b.marr'), 'wt')
+# Rounded to 3 decimal places
+round(checkBalance(temp, c('bw', 'b.marr'), 'wt'),3)
 ```
 
+
+
+***
 
 ## Question 5: Repeat steps 2-4 within the matching framework.
 
@@ -236,6 +326,7 @@ dt$psc_full <- ps.m3$fitted.values
 confusionMatrix(factor(ifelse(dt$psc_full>0.5,1,0)), factor(dt$treat))
 ```
 
+
 ```{r Q5.randomForest}
 # Model 4: Random Forest
 m.rf = randomForest(as.factor(treat) ~ ., data=dt[, c('treat', confounders)], ntree = 10)
@@ -249,11 +340,12 @@ dt_nnet = as.data.frame(dt[, c('treat', confounders)])
 dt_nnet[, which(sapply(dt_nnet, class)=="numeric")] = scale(dt_nnet[, which(sapply(dt_nnet, class)=="numeric")])
 dt_nnet$treat = as.factor(dt_nnet$treat)
 
-nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout=FALSE, maxit=200)
+nn_mod = nnet(treat ~ ., data=dt_nnet, size=12, linout=FALSE, maxit=500, decay=0.1)
 dt$psc_nn = as.numeric(predict(nn_mod))
 confusionMatrix(factor(ifelse(dt$psc_nn>0.5,1,0)), factor(dt$treat))
 ```
 
+<<<<<<< HEAD
 Matching with new models:
 ```{r Q5.match}
 # Matches
@@ -282,34 +374,43 @@ myMH = function(trtnms, ctrnms, inv.cov, df) {
     xdiffs <-as.matrix(df[trtnms, covars]) - as.matrix(df[ctrnms, covars])
     sqrt(rowSums((xdiffs %*% inv.cov) * xdiffs))
 }
+=======
+>>>>>>> 3f201f53c0794d8bf248d548150c17b1e7335f4d
 
-mahaloMahalanobis = function(df, confounders) {
-    # Calculate mahalanobis distance for all treated X control pairs
-    inv_cov_mat = solve(cov(df[, confounders]), tol=1e-24)
-    treated = row.names(df[df$treat==1,])
-    controls = row.names(df[df$treat==0,])
-    return( outer(treated, controls, FUN=myMH, inv.cov=inv_cov_mat, data=df) )
+$$d(x,y) =  \sqrt{(x - y)^T S^{-1} (x-y)} $$
+
+We constructed our own Mahalonobis Distance function. As shown below, it gets the same results as the MatchIt package. 
+
+```{r Q5.mahalonobis_original_edited}
+# Mahalanobis Distance function, d(x,y)
+myMH = function(trt, ctr, inv.cov, data){
+  x = as.matrix(data[trt,])
+  y = as.matrix(data[ctr,])
+  diff = x - y
+  sqrt(rowSums((diff %*% inv.cov) * diff))
 }
 
-matchMahalanobis = function(mhDistMat, df) {
-    # Return 'cnts' for controls for Mahalanobis 1-1 matching with replacement
-    
-    controls = data.frame(ctrl=seq(nrow(df[df$treat==0,])))
-    # For each treated find matched control
-    matched = apply(mhDistMat, 1, function(i) min(which(i==min(i))))
-    matched.count <- data.frame(table(matched))
-    matches = merge(controls, matched.count, by.x='ctrl', by.y='matched', all.x=TRUE)
-    matches[is.na(matches$Freq), 'Freq'] <- 0
-    return(matches[['Freq']])
-}
+inv_cov_mat = solve(cov(dt[,confounders]))
+trt = row.names(dt[dt$treat==1,])
+ctr = row.names(dt[dt$treat==0,])
 
-# Calculate mahalanobis distance matrix
-mahalanobisDist = mahaloMahalanobis(dt, confounders)
-# 1-1 matching with replacement
-dt[dt$treat==0, 'wt.mh'] = matchMahalanobis(mahalanobisDist, dt)
-dt[dt$treat==1, 'wt.mh'] = 1
+# Compute distances for all pairwise distances between treated and control
+mahalo_dist = outer(trt, ctr, FUN = myMH, inv.cov = inv_cov_mat, data = dt[,confounders])
+
+# Find Matches (Smallest Distance) 
+matches = apply(mahalo_dist,1, function(x) min(which(x == min(x))))
+
+# Get Weights
+m_freq = data.frame(table(matches))
+ctr.idx = data.frame(idx=seq(1:sum(dt$treat==0)))
+matches = merge(ctr.idx,m_freq,by.x='idx',by.y='matches',all.x=T)
+
+# Set Weights
+dt[dt$treat==0,'wt.mh'] = matches$Freq
+dt[dt$treat==1,'wt.mh'] = 1
 ```
 
+<<<<<<< HEAD
 Check overlap and balance:
 ```{r Q5.overlap}
 # OVERLAP
@@ -325,8 +426,76 @@ full.bal = checkBalance(dt, confounders, 'wt.full')
 rf.bal = checkBalance(dt, confounders, 'wt.rf')
 nn.bal = checkBalance(dt, confounders, 'wt.nn')
 mh.bal = checkBalance(dt, confounders, 'wt.mh')
+=======
+
+```{r}
+# Check against MatchIt function  
+df = dt[,c('treat',confounders)]
+zz <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm + black + hispanic + lths + hs + college + st9 + st25 + st42, data=df, method="nearest",
+              distance="mahalanobis", replace=TRUE)
+
+# Check control subject ID of our Mahalanobis matches to the MatchIt matches
+my_ctrl_idx = row.names(dt[dt$treat==0 & dt$wt.mh>0,])
+matchIt_ctrl_idx = zz$match.matrix
+
+my_ctrl_idx %in% matchIt_ctrl_idx 
 ```
 
+
+```{r Q5 matching}
+# Rematching
+
+# Probit
+matches <- matching(z=dt$treat, score=dt$psc_probit, replace=TRUE)
+dt[dt$treat==1, 'w_probit'] <- 1
+dt[dt$treat==0, 'w_probit'] <- matches$cnt
+
+# Probit with Interactions
+matches <- matching(z=dt$treat, score=dt$psc_full, replace=TRUE)
+dt[dt$treat==1, 'w_full'] <- 1
+dt[dt$treat==0, 'w_full'] <- matches$cnts
+
+# Matching without Replacement using Original Logit Model
+matches_nr <- matching(z=dt$treat, score=dt$psc, replace=FALSE)
+matches_nr_idx <- c(which(dt$treat==1), 
+                    matches_nr$matched[1:290])
+dt[matches_nr_idx, 'w_logit_no_rep'] = 1
+
+# Random Forest
+matches <- matching(z=dt$treat, score=dt$psc_rf, replace=TRUE)
+dt[dt$treat==1, 'w_rf'] <- 1
+dt[dt$treat==0, 'w_rf'] <- matches$cnts
+
+# Neural net
+matches <- matching(z=dt$treat, score=dt$psc_nn, replace=TRUE)
+dt[dt$treat==1, 'w_nn'] <- 1
+dt[dt$treat==0, 'w_nn'] <- matches$cnts
+```
+
+
+```{r Q5 check balance}
+# OVERLAP
+# Paired, inverted histograms: propensity scores
+nbins <- 40
+examine_overlap(dt,40,var='psc_probit',var_name='Propensity Score (Probit Model)',ylim=c(-30,50),xlab='Propensity Score')
+examine_overlap(dt,40,var='psc_full',var_name='Propensity Score (Probit Full Model)',ylim=c(-30,50),xlab='Propensity Score')
+examine_overlap(dt,40,var='psc_rf',var_name='Propensity Score (RF Model)',ylim=c(-30,50),xlab='Propensity Score')
+examine_overlap(dt,40,var='psc_nn',var_name='Propensity Score (NN Model)',ylim=c(-30,50),xlab='Propensity Score')
+
+
+plotMeanDiff(checkBalance(dt, confounders, 'wt'))  
+plotMeanDiff(checkBalance(dt, confounders, 'w_probit'))  
+plotMeanDiff(checkBalance(dt, confounders, 'w_full'))  
+plotMeanDiff(checkBalance(dt, confounders, 'w_logit_no_rep'))  
+plotMeanDiff(checkBalance(dt, confounders, 'w_rf'))  
+plotMeanDiff(checkBalance(dt, confounders, 'w_nn'))  
+plotMeanDiff(checkBalance(dt, confounders, 'wt.mh'))  
+
+>>>>>>> 3f201f53c0794d8bf248d548150c17b1e7335f4d
+```
+
+
+*** 
 
 ## Question 6: Repeat steps 2-4, but this time using IPTW.
 
@@ -360,11 +529,17 @@ iptw.balance
 ```
 
 
+
+***
+
 ### Question 7: Comparative balance table Create a table with columns 6 and 8 from your function for each of the matching and weighting methods performed above. Which approach would you choose and why? (1-2 paragraphs at most)
 
 \texttt{ANSWER:}  
 
 
+
+
+*** 
 
 ### Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5) 
 
@@ -403,17 +578,22 @@ plot(dt$w_mahalo)
 ```
 
 
+
+***
+
 ### Question 9: Assumptions What assumptions are necessary to interpret the estimates from the propensity score approaches causally? List and describe briefly.
 
 \texttt{ANSWER:}  
 
 
-
+***
+ 
 ### Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
 
 \texttt{ANSWER:}  
 
 
+***
 
 ### Question 11: Comparison to linear regression Fit a regression of your outcomes to the treatment indicator and covariates.
 
