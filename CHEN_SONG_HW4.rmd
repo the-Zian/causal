@@ -54,7 +54,7 @@ load('data/hw4.rdata')
 # Pick confounders based on correlation to treatment and outcome variables
 corr_mat <- cor(hw4)
 corr_mat <- rbind(corr_mat['treat',], corr_mat['ppvtr.36',])
-confounders <- names(which((abs(corr_mat[1,]) > 0.3) + (abs(corr_mat[2,]) > 0.3) > 0))
+confounders <- names(which((abs(corr_mat[1,]) > 0.03) * (abs(corr_mat[2,]) > 0.02) > 0))
 confounders <- confounders[!(confounders %in% c('treat', 'ppvtr.36'))]
 
 # Remove post-treatment variables
@@ -85,7 +85,21 @@ head(dt)
 colnames(dt)[3:length(dt)]
 ```
 
+Selected confounders:  
 
+Child:
+- child's birth weight (bw)
+- number of weeks preterm child was born (preterm)
+- indicator for whether child was born male or female (first)
+
+Mother:
+- mom age at time of birth(momage)
+- indicator for whether mom was married at birth (b.marr)
+- indicator for whether mom received prenatal care (prenatal)
+- indicator for wehther mom drank alcohol while pregnant (booze)
+- indicators for child's race/ethnicity (black, hispanic, white)
+- indicators for mother's education at time of birth (lths, hs, college)
+- indicator for state where household resides (st9, st25, st42)
 
 
 ***
