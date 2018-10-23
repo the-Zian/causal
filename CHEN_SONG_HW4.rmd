@@ -339,7 +339,7 @@ dt_nnet = as.data.frame(dt[, c('treat', confounders)])
 dt_nnet[, which(sapply(dt_nnet, class)=="numeric")] = scale(dt_nnet[, which(sapply(dt_nnet, class)=="numeric")])
 dt_nnet$treat = as.factor(dt_nnet$treat)
 
-nn_mod = nnet(treat ~ ., data=dt_nnet, size=8, linout=FALSE, maxit=200)
+nn_mod = nnet(treat ~ ., data=dt_nnet, size=12, linout=FALSE, maxit=500, decay=0.1)
 dt$psc_nn = as.numeric(predict(nn_mod))
 confusionMatrix(factor(ifelse(dt$psc_nn>0.5,1,0)), factor(dt$treat))
 ```
