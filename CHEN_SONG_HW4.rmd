@@ -173,9 +173,8 @@ examine_overlap(dt, nbins=20, var='momage', var_name='Birth weight', xlab='Birth
 
 \texttt{ANSWER:}  
 
-#####################################################  
-Since our estimand of interest is the \texttt{ATT}, we need similar observations from the control group to use as our counterfactuals for the treatment group. The plots above show sufficient overlap (relative to the treated) between the two groups in propensity scores, number of weeks the baby was born preterm, child's birth weight, and days child was in hospital after birth.
-#####################################################  
+These plots reveal we have enough overlap to estimate the average treatment effect on the treated. Between the treatment and control groups, we examined the overlap in propensity scores, preterm, and birth weight covariates.  A couple notes. One, due to the imbalance in number of observations between treatment and control groups, comparing paired histograms can misleadingly imply lack of overlap. We addressed this issue by limiting the range of y-axis in the plots, effectively “zooming in”, so that all histogram bins are clearly visible.  Two, notice in the paired histograms for the propensity score that there are no control observations in the highest bin group of propensity scores (0.975-1.00). This may suggest there is not complete overlap, however, it is also an artifact of the histogram bin size. Doubling the bin size from 0.025 to 0.05 propensity score units eliminates this lack of overlap.
+
 
 ### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
 
@@ -241,6 +240,10 @@ checkBalance = function(df, confounders, wt_var) {
 ### (d) How do you interpret the resulting balance? In particular what are your concerns with regard to covariates that are not well balanced (write about 5 or 6 sentences).
 
 \texttt{ANSWER:}
+
+We focus on the balance statistics for the matched sample, given that our estimand of interest is the \texttt{ATT}. First, we examine the difference in means (standardized for continuous covariates) in the matched sample, and notice similar group means (mean difference < 0.10) in nearly half of the covariates (7 of 15). The fact that the means of several mother-related covariates (momage, b.marr, first, black, hispanic) are dissimilar between the treated and control groups in the matched sample is of concern. Additionally, the ratio of standard deviations in the matched sample is only close to 1.0 for 1 of 3 continuous covariates. Particularly concerning is the greater variance in mother’s age at birth in the treatment group compared to the control group.
+
+
 ```{r Q4d}
 ps.m1.bal <- checkBalance(df=dt, confounders=confounders, wt_var='wt')
 
