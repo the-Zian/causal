@@ -5,6 +5,7 @@ author: Alan Z Chen, Chansoo Song
 date: "`r format(Sys.time(), '%B %Y')`"
 header-includes:
     - \usepackage{amsmath}
+    - \usepackage{float}
 output: pdf_document
 ---
 
@@ -465,7 +466,7 @@ plotSDRatios(temp, 'Comparing SD Ratios of All Propensity Score Models\n and Mat
 
 \texttt{ANSWER:}
 
-```{r Q2}
+```{r Q6.i}
 ps.IPTW <- glm(treat ~ ., data=dt[, c('treat',confounders)], family=binomial(link='logit'))
 dt$psc_iptw <- ps.IPTW$fitted.values
 ```
@@ -513,11 +514,14 @@ compareBalance <- function(model_bals, model_names, col) {
 
 model_bals <- list(logit.bal, probit.bal, logit_nr.bal, mh.bal, mk2.bal, iptw.balance)
 model_names <- c('Logistic', 'Probit', 'Logistic (no replacement)', 'Mahalanobis Matching', 'K=2 Nearest Neighbors', 'IPTW')
+
+compareDiffs <- compareBalance(model_bals, model_names, 6)
+compareRatios <- compareBalance(model_bals, model_names, 8)
 ```
 
-`r compareBalance(model_bals, model_names, 6)`
+`r compareDiffs`
 
-`r compareBalance(model_bals, model_names, 8)`
+`r compareRatios`
 
 
 
