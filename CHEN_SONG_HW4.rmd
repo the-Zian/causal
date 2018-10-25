@@ -32,7 +32,6 @@ library(reshape2)
 library(knitr)
 library(kableExtra)
 
-rm(list=ls())
 # Set global ggplot theme
 theme_set(theme_minimal())
 # Define global color palettes
@@ -324,37 +323,35 @@ round(checkBalance(temp, c('bw', 'b.marr'), 'wt'),3)
 We use the following propensity score models to try to achieve better balance:  
 - Probit regression  
 
-We use the following matching methods to try to achieve better balance.
-- Mahalonobis Distance Matching
+We use the following matching methods to try to achieve better balance:  
+- Mahalanobis Distance Matching  
 - Matching without Replacement (Using propensity scores from original logistic regression)  
 - Nearest Neighbor Matching with Replacement
 
-Brief descriptions of each of the methods:
+Brief descriptions of each of the methods:  
 
-(1) Probit Regression
+**(1) Probit Regression**
 
 A probit regression is equivalent to the logistic regression except that it replaces the logistic with the normal distribution. So:
 
 $$Pr(y_{i} = 1) = \Phi(X_{i}B)$$
-where $\Phi$ is the normal cumulative distribution function. There is strong overlap between the control and treatment distributions over the propensity score so no observations were dropped. We using matching with replacement 
 
-(2) Mahalanobis Matching
+Where $\Phi$ is the normal cumulative distribution function. There is strong overlap between the control and treatment distributions over the propensity score so no observations were dropped. We using matching with replacement 
+
+**(2) Mahalanobis Matching**
 
 Mahalanobis matching uses a distance measure in multivariate space that takes into account variances of variables as well as covariances between them. 
 
-(3) Matching without Replacement (Using propensity scores from original logistic regression)
+**(3) Matching without Replacement (Using propensity scores from original logistic regression)**
 
 We use the original propensity scores Q2. This time, we match without replacement.
 
-(4) Nearest Neighbor Matching with Replacement
+**(4) Nearest Neighbor Matching with Replacement**
 
-We use K-closest matching with k = 2. This matching method selects the 2 control subjects with the closest distance to the treated subject (using default=logit). Matches are chosen for treatment subjects one at a time using the default order (largest to smallest). We allow for replacement.
-
-
+We use K-closest matching with k = 2. This matching method selects the 2 control subjects with the closest distance to the treated subject (using `default=logit`). Matches are chosen for treatment subjects one at a time using the default order (largest to smallest). We allow for replacement.
 
 
-Fit new propensity score models:
-
+Fit new propensity score models:  
 ```{r Q5.probit}
 # Model 2: Probit
 ps.m2 <- glm(treat ~ ., data=dt[, c('treat', confounders)], family=binomial(link='probit'))
@@ -363,8 +360,7 @@ confusionMatrix(factor(ifelse(dt$psc_probit>0.5,1,0)), factor(dt$treat))
 ```
 
 Matching with new models:
-
-```{r Q5 matching}
+```{r Q5.matching}
 # Rematching
 
 # Probit
@@ -381,12 +377,10 @@ dt$w_logit_no_rep[is.na(dt$w_logit_no_rep)] = 0
 ```
 
 Calculate the Mahalanobis distance for matching:
-
 $$d(x,y) =  \sqrt{(x - y)^T S^{-1} (x-y)}$$
+We constructed our own Mahalanobis Distance function. As shown below, it gets the same results as the `MatchIt` package. 
 
-We constructed our own Mahalonobis Distance function. As shown below, it gets the same results as the MatchIt package. 
-
-```{r Q5.mahalonobis_original_edited}
+```{r Q5.mahalanobis}
 # Mahalanobis Distance function, d(x,y)
 myMH = function(trt, ctr, inv.cov, data){
   x = as.matrix(data[trt,])
@@ -412,22 +406,22 @@ matches = merge(ctr.idx,m_freq,by.x='idx',by.y='matches',all.x=T)
 
 # Set Weights
 dt[dt$treat==0,'wt.mh'] = matches$Freq*0.5241379
-dt$wt.mh[is.na(dt$wt.mh)] = 0
-dt[dt$treat==1,'wt.mh'] = 1
+dt$wt_mh[is.na(dt$wt_mh)] = 0
+dt[dt$treat==1,'wt_mh'] = 1
 ```
 
-```{r}
+```{r Q5.mahalanobis_check}
 # Check against MatchIt function  
 df = dt[,c('treat',confounders)]
 zz <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm + black + hispanic + lths + hs + college + st9 + st25 + st42, data=df, method="nearest",
               distance="mahalanobis", replace=TRUE)
 
 # Check weights derived from our Mahalanobis matches to the MatchIt matches
-cbind(dt$wt.mh[291:310],zz$weights[291:310])
+cbind(dt$wt_mh[291:310],zz$weights[291:310])
 ```
 
 K-2 Matching with Replacement:
-```{r}
+```{r Q5.k2nn}
 # Check against MatchIt function  
 df = dt[,c('treat',confounders)]
 k2 <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm + black + hispanic + lths + hs + college + st9 + st25 + st42, data=df, method="nearest",
@@ -435,14 +429,12 @@ k2 <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm 
 dt$wt_k2 = k2$weights
 ```
 
-
 Check overlap and balance:
-
-```{r Q5 check balance}
+```{r Q5.balance}
 logit.bal <- checkBalance(dt, confounders, 'wt')
 probit.bal <- checkBalance(dt, confounders, 'w_probit')
 logit_nr.bal <- checkBalance(dt, confounders, 'w_logit_no_rep')
-mh.bal <- checkBalance(dt, confounders, 'wt.mh')
+mh.bal <- checkBalance(dt, confounders, 'wt_mh')
 mk2.bal <- checkBalance(dt, confounders, 'wt_k2')
 
 plotMeanDiff(logit.bal, 'Propensity Score Model: Logistic Regression')
@@ -458,6 +450,7 @@ temp = temp[order(rownames(temp)),]
 row.names(temp) = paste(row.names(temp),rep(c('logit','probit','logit_no_replace','mahalanobis','neighbor'),times=15),sep='_')
 plotSDRatios(temp, 'Comparing SD Ratios of All Propensity Score Models\n and Matching Methods Used')
 ```
+
 
 
 *** 
@@ -503,13 +496,17 @@ compareBalance <- function(model_bals, model_names, col) {
     temp.df <- data.frame(do.call('cbind', temp.ls))
     # kable output
     names(temp.df) <- model_names
-    out <- kable(round(temp.df,2), align='c', format='latex')
-    if (col==6) {
-        out <- out %>% add_header_above(c(' '=1, 'Mean Difference (matched)'=n_models))
+    if (interactive()) {
+        return(round(temp.df, 2))
     } else {
-        out <- out %>% add_header_above(c(' '=1, 'Ratio sd (matched)'=n_models))
+        out <- kable(temp.df, digits=2, align='c', format='latex')
+        if (col==6) {
+            out <- out %>% add_header_above(c(' '=1, 'Mean Difference (matched)'=n_models))
+        } else {
+            out <- out %>% add_header_above(c(' '=1, 'Ratio sd (matched)'=n_models))
+        }
+        return(out)
     }
-    return(out)
 }
 
 model_bals <- list(logit.bal, probit.bal, logit_nr.bal, mh.bal, mk2.bal, iptw.balance)
@@ -533,34 +530,30 @@ Estimate the effect of the treatment on the treated for each of your five approa
 
 \texttt{ANSWER:}
 ```{r Q8}
-dt[dt$treat==0, 'w'] <- wts
-dt[dt$treat==1, 'w'] <- 1
-df = dt[,c('ppvtr.36','treat',confounders)]
+temp <- dt[,c('ppvtr.36', 'treat', confounders)]
 
-mod1 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w))$coefficients
-mod1.out = c(mod1[2,1],mod1[2,2])
+mod1 = summary(lm(ppvtr.36 ~ ., data=temp, weights=dt$wt))$coefficients
+mod1.out = c(mod1['treat', 'Estimate'], mod1['treat', 'Std. Error'])
 
-mod2 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_probit))$coefficients
-mod2.out = c(mod2[2,1],mod2[2,2])
+mod2 = summary(lm(ppvtr.36 ~ ., data=temp, weights=dt$w_probit))$coefficients
+mod2.out = c(mod2['treat', 'Estimate'], mod2['treat', 'Std. Error'])
 
-mod3 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_full))$coefficients
-mod3.out = c(mod3[2,1],mod3[2,2])
+mod3 = summary(lm(ppvtr.36 ~ ., data=temp, weights=dt$w_logit_no_rep))$coefficients
+mod3.out = c(mod3['treat', 'Estimate'], mod3['treat', 'Std. Error'])
 
-mod4 = summary(lm(ppvtr.36 ~ ., data = df, weights = dt$w_mahalo))$coefficients
-mod4.out = c(mod4[2,1],mod4[2,2])
+mod4 = summary(lm(ppvtr.36 ~ ., data=temp, weights=dt$wt_mh))$coefficients
+mod4.out = c(mod4['treat', 'Estimate'], mod4['treat', 'Std. Error'])
 
-mod5 = summary(lm(ppvtr.36 ~ ., data = df, weights = r_att))$coefficients
-mod5.out = c(mod5[2,1],mod5[2,2])
+mod5 = summary(lm(ppvtr.36 ~ ., data=temp, weights=dt$wt_k2))$coefficients
+mod5.out = c(mod5['treat', 'Estimate'], mod5['treat', 'Std. Error'])
 
-q8_results = rbind(mod1.out,mod2.out,mod3.out,mod4.out,mod5.out)
-row.names(q8_results) = c('logit','probit','full probit','mahalo','IPTW')
-colnames(q8_results) = c('coef','se')
-q8_results
+mod6 = summary(lm(ppvtr.36 ~ ., data=temp, weights=dt$r_att))$coefficients
+mod6.out = c(mod5['treat', 'Estimate'], mod5['treat', 'Std. Error'])
 
-plot(dt$w_probit)
-plot(dt$w)
-plot(dt$w_full)
-plot(dt$w_mahalo)
+q8_results = rbind(mod1.out, mod2.out, mod3.out, mod4.out, mod5.out, mod6.out)
+row.names(q8_results) = c('logit (w/ replacement)', 'probit (w/ replacement)', 'logit (no replacement)', 'Mahalanobis Matching', 'K-2 Nearest Neighbors', 'IPTW')
+colnames(q8_results) = c('Treatment Effect','Std. Error')
+kable(q8_results, digits=2, align='c', format='markdown', caption='Treatment Effect Estimation by Propensity Score Model')
 ```
 
 
@@ -571,11 +564,11 @@ plot(dt$w_mahalo)
 
 \texttt{ANSWER:}  
 
-(a) Ignorability:
+**(a) Ignorability**
 
 Ignorability holds if the covariates in the propensity score model are the only confounding covariates and we match on the propensity score. So we need to assume that we have controlled for all the potential confounders. Then we can unbiasedly estimate $E[Y(1)| Z=1, e(X)]$ with $\bar{Y}_{Z=1,e(X)}$ and $E[Y(0)| Z=1, e(X)]$ with $\bar{Y}_{Z=0,e(X)}$.
 
-(b) Sufficient Overlap
+**(b) Sufficient Overlap**
 
 If we are interested in the effect of the treatment on the treated, we want to make sure that for each treatment group member there is a control group member that is sufficiently similar. Then, we can use this control group member as an empirical counterfactual. 
 
@@ -583,19 +576,22 @@ Similarly, if we are interested in the effect of the treatment on the control, w
 
 If we are interested in the average treatment effect, we want to make sure that for each subject in either treatment or control, there is an empirical counterfactual (i.e. a sufficiently similar control subject for a treatment subject and vise versa).
 
-(c) Appropriate specification of the propensity score model / balance achieved
+**(c) Appropriate specification of the propensity score model / balance achieved**
 
 An appropriate specification of the propensity score model ensures that we have good overlap and balance. Overlap is important with regard to drawing causal inference due to reasons listed above. Balance is important because imbalance forces us to rely more on the correct functional form of our model. Incorrect functional forms would lead to biased estimates of the treatment effect.
 
-(d) SUTVA
+**(d) SUTVA**
 
 Stable unit treatment value assumption states that the treatment effect does not depend on the particular configuration of treatment assignment. That is, there is no dilution or concentration of the treatment effect. 
+
+
 
 ***
  
 ### Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
 
 \texttt{ANSWER:}  
+For children who participated in the IDHP intervention, their IQ scores at age 3 were `r round(mod6.out[1], 1)` points higher than had they not participated in the intervention.
 
 
 
@@ -605,7 +601,7 @@ Stable unit treatment value assumption states that the treatment effect does not
 
 #### (a) Report your estimate and standard error.
 
-\texttt{ANSWER:}
+\texttt{ANSWER:}  
 ```{r Q11.a}
 lm1 <- lm(ppvtr.36 ~ ., data=dt[, c(confounders, 'ppvtr.36', 'treat')])
 round(summary(lm1)$coefficients['treat', c('Estimate', 'Std. Error'), drop=FALSE], 2)
@@ -614,10 +610,10 @@ round(summary(lm1)$coefficients['treat', c('Estimate', 'Std. Error'), drop=FALSE
 #### (b) Interpret your results non-causally
 
 \texttt{ANSWER:}  
-
+A group of children who participated in the IHDP intervention will expect, on average, an 11.54 point increase in their age 3 IQ scores compared to a group of children who did not participate in the intervention, controlling for all other covariates.
 
 
 #### (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
 
 \texttt{ANSWER:}  
-
+In terms of estimating causal effects, propensity score approaches are preferred over linear regression to account for the systematic differences between the treatment and control groups in key covariates that can affect the outcome. While linear regression can account for some group differences, the method is highly dependent on correct model specificity in order avoid treatment effect estimation bias. Propensity score approaches decrease this bias by restructuring the sample of controls and/or treated observations so that there is overlap in the common support of the covariates between groups, and improved balance in distributions of the covariates between groups. Propensity score approaches decrease the treatment effect estimation bias caused by extrapolating into areas of the covariate space outside of the support of the data, and incorrect model specification of the treatment and covariates on the outcome.
