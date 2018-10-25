@@ -445,9 +445,9 @@ logit_nr.bal <- checkBalance(dt, confounders, 'w_logit_no_rep')
 mh.bal <- checkBalance(dt, confounders, 'wt.mh')
 mk2.bal <- checkBalance(dt, confounders, 'wt_k2')
 
-plotMeanDiff(logit.bal, 'Propensity Score Model: Logistic Regression')  
-plotMeanDiff(probit.bal, 'Propensity Score Model: Probit Regression')  
-plotMeanDiff(logit_nr.bal, 'Matching Method: Logistic w/o Replacement')  
+plotMeanDiff(logit.bal, 'Propensity Score Model: Logistic Regression')
+plotMeanDiff(probit.bal, 'Propensity Score Model: Probit Regression')
+plotMeanDiff(logit_nr.bal, 'Matching Method: Logistic w/o Replacement')
 plotMeanDiff(mh.bal, 'Matching Method: Mahalanobis')
 plotMeanDiff(mk2.bal, 'Matching Method: Nearest Neighbor (k=2)')
 
