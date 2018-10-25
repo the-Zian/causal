@@ -610,7 +610,7 @@ round(summary(lm1)$coefficients['treat', c('Estimate', 'Std. Error'), drop=FALSE
 #### (b) Interpret your results non-causally
 
 \texttt{ANSWER:}  
-A group of children who participated in the IHDP intervention will expect, on average, an 11.54 point increase in their age 3 IQ scores compared to a group of children who did not participate in the intervention, controlling for all other covariates.
+A group of children who participate in the IHDP intervention will expect, on average, an 11.54 point increase in their age 3 IQ scores compared to a group of children who did not participate in the intervention, controlling for all other covariates.
 
 
 #### (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
