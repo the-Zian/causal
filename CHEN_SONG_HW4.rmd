@@ -428,7 +428,7 @@ dt$wt_k2 = k2$weights
 ```{r Q5.overlap}
 title <- ggtitle('Propensity Score Model: Probit Regression')
 examine_overlap(dt[dt$w_probit!=0,], nbins=40, var='psc_probit', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-10,10), title)
-title <- ggittle('Matching Method: Logistic w/o Replacement')
+title <- ggtitle('Matching Method: Logistic w/o Replacement')
 examine_overlap(dt[dt$w_logit_no_rep!=0,], nbins=40, var='psc', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-10,10), title)
 title <- ggtitle('Matching Method: Mahalanobis')
 examine_overlap(dt[dt$wt_mh!=0,], nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-50,50), title)
@@ -525,9 +525,10 @@ compareRatios <- compareBalance(model_bals, model_names, 8)
 
 `r compareDiffs`
 
-
-
 `r compareRatios`
+
+We compare the mean differences and ratios of standard deviations among confounders between the treatment and control groups to assess which propensity and/or matching approach results in the best balance. We aim to reduce the mean differences to below 0.10 for continuous variables and 0.05 for binary variables. For the ratio of standard deviations, we aim to get as close to 1.0 as possible. Considering the number of confounders and approaches, the above tables can make assessments of which approach is best due to the number of values to compare. The plots from Question 5 aid in comparing mean differences and ratios of standard deviations.  
+We prioritize balancing mean differences over ratios because we only consider 3 continuous confounders, and none of the approaches are significantly better in balancing the ratios. The Mahalanobis matching approach achieved the best balance in mean differences, and thus we choose this approach.
 
 
 
@@ -600,7 +601,7 @@ Stable unit treatment value assumption states that the treatment effect does not
 ## Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
 
 \texttt{ANSWER:}  
-For children who participated in the IDHP intervention, their IQ scores at age 3 were `r round(mod6.out[1], 1)` points higher than had they not participated in the intervention.
+For children who participated in the IDHP intervention, their IQ scores at age 3 were `r round(mod4.out[1], 1)` points higher than had they not participated in the intervention.
 
 
 
