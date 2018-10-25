@@ -13,7 +13,7 @@ output: pdf_document
 knitr::opts_chunk$set(echo=TRUE)
 knitr::opts_chunk$set(include=TRUE)
 knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE)
-knitr::opts_knit$set(root.dir='..')
+knitr::opts_knit$set(root.dir='.')
 ```
 
 ```{r rmd, message=FALSE}
@@ -118,13 +118,13 @@ dt$psc <- ps.m1$fitted.values
 
 ## Question 3: Restructure your data through matching. [Or at least create the weights variable that will let you to do so in the following steps] (Step 3)
 
-- (a) The first thing you need to be clear on before restructuring your data is the estimand. Given the description above about the research question, what is the estimand of interest?  
+### (a) The first thing you need to be clear on before restructuring your data is the estimand. Given the description above about the research question, what is the estimand of interest?  
 
 \texttt{ANSWER:}  
 The research question of interest focuses on the effect of the intervention on the children that participated in it. Since we are interested on the effect of those who received treatment, the estimand of interest is the \texttt{ATT} (average treatment effect for the treated).
 
 
-- (b) First please perform *one-to-one nearest neighbor matching with replacement* using your estimated propensity score from Question 2. Perform this matching using the `matching` command in the arm package. The *"cnts"* variable in the output reflects the number of times each control observation was used as a match (the length is equal to the number of control observations). Use the output of this function to create a weight variable that  
+### (b) First please perform *one-to-one nearest neighbor matching with replacement* using your estimated propensity score from Question 2. Perform this matching using the `matching` command in the arm package. The *"cnts"* variable in the output reflects the number of times each control observation was used as a match (the length is equal to the number of control observations). Use the output of this function to create a weight variable that  
 - 1) equals one for treated observations and  
 - 2) equals the number of times used as a match for non- treated observations.  
 
@@ -173,7 +173,6 @@ examine_overlap(dt, nbins=20, var='momage', var_name='Birth weight', xlab='Birth
 
 
 \texttt{ANSWER:}  
-
 These plots reveal we have enough overlap to estimate the average treatment effect on the treated. Between the treatment and control groups, we examined the overlap in propensity scores, preterm, and birth weight covariates.  A couple notes: One, due to the imbalance in number of observations between treatment and control groups, comparing paired histograms can misleadingly imply lack of overlap. We addressed this issue by limiting the range of y-axis in the plots, effectively “zooming in”, so that all histogram bins are clearly visible.  Two, notice in the paired histograms for the propensity score that there are no control observations in the highest bin group of propensity scores (0.975-1.00). This may suggest there is not complete overlap, however, it is also an artifact of the histogram bin size. Doubling the bin size from 0.025 to 0.05 propensity score units eliminates this lack of overlap.
 
 
@@ -240,10 +239,8 @@ checkBalance = function(df, confounders, wt_var) {
 
 ### (d) How do you interpret the resulting balance? In particular what are your concerns with regard to covariates that are not well balanced (write about 5 or 6 sentences).
 
-\texttt{ANSWER:}
-
+\texttt{ANSWER:}  
 We focus on the balance of statistics for the matched sample, given that our estimand of interest is the \texttt{ATT}. First, we examine the difference in means (standardized for continuous covariates) in the matched sample, and notice similar group means (mean difference < 0.10) in nearly half of the covariates (7 of 15). The fact that the means of several mother-related covariates (momage, b.marr, first, black, hispanic) are dissimilar between the treated and control groups in the matched sample is of concern. Additionally, the ratio of standard deviations in the matched sample is only close to 1.0 for 1 of 3 continuous covariates. Particularly concerning is the greater variance in mother’s age at birth in the treatment group compared to the control group.
-
 
 ```{r Q4d}
 ps.m1.bal <- checkBalance(df=dt, confounders=confounders, wt_var='wt')
@@ -251,8 +248,6 @@ ps.m1.bal <- checkBalance(df=dt, confounders=confounders, wt_var='wt')
 # Rounded to two decimal places
 round(ps.m1.bal,2)
 ```
-
-
 
 ```{r Q4d plot}
 # Plot standardized mean Differences
@@ -351,7 +346,7 @@ We use the original propensity scores Q2. This time, we match without replacemen
 We use K-closest matching with k = 2. This matching method selects the 2 control subjects with the closest distance to the treated subject (using `default=logit`). Matches are chosen for treatment subjects one at a time using the default order (largest to smallest). We allow for replacement.
 
 
-Fit new propensity score models:  
+**Fit new propensity score models**
 ```{r Q5.probit}
 # Model 2: Probit
 ps.m2 <- glm(treat ~ ., data=dt[, c('treat', confounders)], family=binomial(link='probit'))
@@ -359,7 +354,7 @@ dt$psc_probit <- ps.m2$fitted.values
 confusionMatrix(factor(ifelse(dt$psc_probit>0.5,1,0)), factor(dt$treat))
 ```
 
-Matching with new models:
+**Matching with new models**
 ```{r Q5.matching}
 # Rematching
 
@@ -405,9 +400,9 @@ ctr.idx = data.frame(idx=seq(1:sum(dt$treat==0)))
 matches = merge(ctr.idx,m_freq,by.x='idx',by.y='matches',all.x=T)
 
 # Set Weights
-dt[dt$treat==0,'wt.mh'] = matches$Freq*0.5241379
-dt$wt_mh[is.na(dt$wt_mh)] = 0
-dt[dt$treat==1,'wt_mh'] = 1
+dt[dt$treat==0, 'wt_mh'] = matches$Freq*0.5241379
+dt[is.na(dt$wt_mh), 'wt_mh'] = 0
+dt[dt$treat==1, 'wt_mh'] = 1
 ```
 
 ```{r Q5.mahalanobis_check}
@@ -416,11 +411,11 @@ df = dt[,c('treat',confounders)]
 zz <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm + black + hispanic + lths + hs + college + st9 + st25 + st42, data=df, method="nearest",
               distance="mahalanobis", replace=TRUE)
 
-# Check weights derived from our Mahalanobis matches to the MatchIt matches
-cbind(dt$wt_mh[291:310],zz$weights[291:310])
+# Check weights derived from our Mahalanobis matches to the MatchIt matches (up to 5 decimal places)
+all(round(dt$wt_mh, 5) == round(zz$weights, 5))
 ```
 
-K-2 Matching with Replacement:
+**K-2 Matching with Replacement**
 ```{r Q5.k2nn}
 # Check against MatchIt function  
 df = dt[,c('treat',confounders)]
@@ -429,7 +424,19 @@ k2 <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm 
 dt$wt_k2 = k2$weights
 ```
 
-Check overlap and balance:
+**Check overlap of matched sample**
+```{r Q5.overlap}
+title <- ggtitle('Propensity Score Model: Probit Regression')
+examine_overlap(dt[dt$w_probit!=0,], nbins=40, var='psc_probit', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-10,10), title)
+title <- ggittle('Matching Method: Logistic w/o Replacement')
+examine_overlap(dt[dt$w_logit_no_rep!=0,], nbins=40, var='psc', var_name='Propensity Score', xlab='Propensity Score', ylim=c(-10,10), title)
+title <- ggtitle('Matching Method: Mahalanobis')
+examine_overlap(dt[dt$wt_mh!=0,], nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-50,50), title)
+title <- ggtitle('Matching Method: Nearest Neighbor (k=2)')
+examine_overlap(dt[dt$wt_k2!=0,], nbins=20, var='preterm', var_name='Number Weeks Baby Born Preterm', xlab='Weeks Preterm', ylim=c(-50,20), title)
+```
+
+**Check balance**
 ```{r Q5.balance}
 logit.bal <- checkBalance(dt, confounders, 'wt')
 probit.bal <- checkBalance(dt, confounders, 'w_probit')
@@ -479,7 +486,7 @@ iptw.balance <- checkBalance(dt, confounders, 'r_att')
 
 ***
 
-### Question 7: Comparative balance table. Create a table with columns 6 and 8 from your function for each of the matching and weighting methods performed above. Which approach would you choose and why? (1-2 paragraphs at most)
+## Question 7: Comparative balance table. Create a table with columns 6 and 8 from your function for each of the matching and weighting methods performed above. Which approach would you choose and why? (1-2 paragraphs at most)
 
 \texttt{ANSWER:}  
 ```{r Q7}
@@ -497,7 +504,7 @@ compareBalance <- function(model_bals, model_names, col) {
     # kable output
     names(temp.df) <- model_names
     if (interactive()) {
-        return(round(temp.df, 2))
+        return( round(temp.df, 2) )
     } else {
         out <- kable(temp.df, digits=2, align='c', format='latex')
         if (col==6) {
@@ -505,7 +512,7 @@ compareBalance <- function(model_bals, model_names, col) {
         } else {
             out <- out %>% add_header_above(c(' '=1, 'Ratio sd (matched)'=n_models))
         }
-        return(out)
+        return( out )
     }
 }
 
@@ -518,13 +525,15 @@ compareRatios <- compareBalance(model_bals, model_names, 8)
 
 `r compareDiffs`
 
+
+
 `r compareRatios`
 
 
 
 *** 
 
-### Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5) 
+## Question 8: Estimate the treatment effect for the restructured datasets implied by Questions 4-6 (Step 5) 
 
 Estimate the effect of the treatment on the treated for each of your five approaches by fitting a regression with weights equal to the number of times each observation appears in the matched sample (that is, use your weights variable from above) or using IPTW weights. Report the treatment effect and standard error for each approach.
 
@@ -560,7 +569,7 @@ kable(q8_results, digits=2, align='c', format='markdown', caption='Treatment Eff
 
 ***
 
-### Question 9: Assumptions What assumptions are necessary to interpret the estimates from the propensity score approaches causally? List and describe briefly.
+## Question 9: Assumptions What assumptions are necessary to interpret the estimates from the propensity score approaches causally? List and describe briefly.
 
 \texttt{ANSWER:}  
 
@@ -588,7 +597,7 @@ Stable unit treatment value assumption states that the treatment effect does not
 
 ***
  
-### Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
+## Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
 
 \texttt{ANSWER:}  
 For children who participated in the IDHP intervention, their IQ scores at age 3 were `r round(mod6.out[1], 1)` points higher than had they not participated in the intervention.
@@ -597,9 +606,9 @@ For children who participated in the IDHP intervention, their IQ scores at age 3
 
 ***
 
-### Question 11: Comparison to linear regression Fit a regression of your outcomes to the treatment indicator and covariates.
+## Question 11: Comparison to linear regression Fit a regression of your outcomes to the treatment indicator and covariates.
 
-#### (a) Report your estimate and standard error.
+### (a) Report your estimate and standard error.
 
 \texttt{ANSWER:}  
 ```{r Q11.a}
@@ -607,13 +616,13 @@ lm1 <- lm(ppvtr.36 ~ ., data=dt[, c(confounders, 'ppvtr.36', 'treat')])
 round(summary(lm1)$coefficients['treat', c('Estimate', 'Std. Error'), drop=FALSE], 2)
 ```
 
-#### (b) Interpret your results non-causally
+### (b) Interpret your results non-causally
 
 \texttt{ANSWER:}  
 A group of children who participate in the IHDP intervention will expect, on average, an 11.54 point increase in their age 3 IQ scores compared to a group of children who did not participate in the intervention, controlling for all other covariates.
 
 
-#### (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
+### (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
 
 \texttt{ANSWER:}  
 In terms of estimating causal effects, propensity score approaches are preferred over linear regression to account for the systematic differences between the treatment and control groups in key covariates that can affect the outcome. While linear regression can account for some group differences, the method is highly dependent on correct model specificity in order avoid treatment effect estimation bias. Propensity score approaches decrease this bias by restructuring the sample of controls and/or treated observations so that there is overlap in the common support of the covariates between groups, and improved balance in distributions of the covariates between groups. Propensity score approaches decrease the treatment effect estimation bias caused by extrapolating into areas of the covariate space outside of the support of the data, and incorrect model specification of the treatment and covariates on the outcome.
