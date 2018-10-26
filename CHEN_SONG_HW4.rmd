@@ -80,26 +80,26 @@ head(dt)
 colnames(dt)[3:length(dt)]
 ```
 
-As confounders, we selected covariates that have correlation > 0.03 with treatment and correlation > 0.02 with outcome. We also used Chapter 18 of Gelman and Hill as reference (p. 358 "a set of confounding covariates wthat we think predict both program participation and subsequent test scores"). Our list of confounders is mostly similar. Compared to the text, our list excludes "days in hospital", "sex", "child's age", "some college", "work during pregnancy", "white" and includes "booze" and state indicators. 
+As confounders, we selected covariates that have correlation greater than 0.03 with treatment and correlation greater than 0.02 with outcome. We also used Chapter 18 of Gelman and Hill as reference (p. 358 "a set of confounding covariates that we think predict both program participation and subsequent test scores"). Our list of confounders is mostly similar. Compared to the text, our list excludes "days in hospital", "sex", "child's age", "some college", "work during pregnancy", "white" and includes "booze" and state indicators. 
 
 We excluded post-treatment variables: "dayskidh" and "income" (We determined these are post-treatment because subjects were recruited to the intervention at the time of birth. These two covariates are measured after birth). 
 
 
 #### Selected confounders:  
 
-Child:
-- child's birth weight (bw)
-- number of weeks preterm child was born (preterm)
-- indicator for whether child was born male or female (first)
+Child:  
+- child's birth weight (bw)  
+- number of weeks preterm child was born (preterm)  
+- indicator for whether child was born male or female (first)  
 
-Mother:
-- mom age at time of birth(momage)
-- indicator for whether mom was married at birth (b.marr)
-- indicator for whether mom received prenatal care (prenatal)
-- indicator for wehther mom drank alcohol while pregnant (booze)
-- indicators for child's race/ethnicity (black, hispanic)
-- indicators for mother's education at time of birth (lths, hs, college)
-- indicator for state where household resides (st9, st25, st42)
+Mother:  
+- mom age at time of birth(momage)  
+- indicator for whether mom was married at birth (b.marr)  
+- indicator for whether mom received prenatal care (prenatal)  
+- indicator for wehther mom drank alcohol while pregnant (booze)  
+- indicators for child's race/ethnicity (black, hispanic)  
+- indicators for mother's education at time of birth (lths, hs, college)  
+- indicator for state where household resides (st9, st25, st42)  
 
 
 ***
@@ -171,9 +171,11 @@ examine_overlap(dt, nbins=20, var='momage', var_name='Birth weight', xlab='Birth
 
 ### (b) Interpreting Overlap. What do these plots reveal about the overlap required to estimate our estimand of interest.
 
-
 \texttt{ANSWER:}  
-These plots reveal we have enough overlap to estimate the average treatment effect on the treated. Between the treatment and control groups, we examined the overlap in propensity scores, preterm, and birth weight covariates.  A couple notes: One, due to the imbalance in number of observations between treatment and control groups, comparing paired histograms can misleadingly imply lack of overlap. We addressed this issue by limiting the range of y-axis in the plots, effectively “zooming in”, so that all histogram bins are clearly visible.  Two, notice in the paired histograms for the propensity score that there are no control observations in the highest bin group of propensity scores (0.975-1.00). This may suggest there is not complete overlap, however, it is also an artifact of the histogram bin size. Doubling the bin size from 0.025 to 0.05 propensity score units eliminates this lack of overlap.
+These plots reveal we have enough overlap to estimate the average treatment effect on the treated. Between the treatment and control groups, we examined the overlap in propensity scores, preterm, and birth weight covariates. A few notes.  
+One, due to the imbalance in number of observations between treatment and control groups, comparing paired histograms can misleadingly imply lack of overlap. We addressed this issue by limiting the range of y-axis in the plots, effectively “zooming in”, so that all histogram bins are clearly visible.  
+Two, notice in the paired histograms for the propensity score that there are no control observations in the highest bin group of propensity scores (0.975-1.00). This may suggest there is not complete overlap, however, it is also an artifact of the histogram bin size. Doubling the bin size from 0.025 to 0.05 propensity score units eliminates this lack of overlap.  
+Lastly, there is not complete overlap in birth weight between the treatment and control groups. However, the complete overlap in the propensity score indicates that in the matched sample there should be overlap between across the multi-dimension covariate space. Thus we are unconcerned with this lack of complete overlap in birth weight.
 
 
 ### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
@@ -240,7 +242,8 @@ checkBalance = function(df, confounders, wt_var) {
 ### (d) How do you interpret the resulting balance? In particular what are your concerns with regard to covariates that are not well balanced (write about 5 or 6 sentences).
 
 \texttt{ANSWER:}  
-We focus on the balance of statistics for the matched sample, given that our estimand of interest is the \texttt{ATT}. First, we examine the difference in means (standardized for continuous covariates) in the matched sample, and notice similar group means (mean difference < 0.10) in nearly half of the covariates (7 of 15). The fact that the means of several mother-related covariates (momage, b.marr, first, black, hispanic) are dissimilar between the treated and control groups in the matched sample is of concern. Additionally, the ratio of standard deviations in the matched sample is only close to 1.0 for 1 of 3 continuous covariates. Particularly concerning is the greater variance in mother’s age at birth in the treatment group compared to the control group.
+Given we are using propensity scores to match controls observations as empirical counterfactuals to treatment observations, we wish to see better balance in the matched sample compared to the unmatched sample. Specifically, we are looking to reduce mean differences and achieve ratios of standard deviations close to 1 in the matched sample.  
+First, we examine the difference in means (standardized for continuous covariates) in the matched sample, and notice similar group means (mean difference < 0.10) in nearly half of the covariates (7 of 15). The fact that the means of several mother-related covariates (momage, b.marr, first, black, hispanic) are dissimilar between the treated and control groups in the matched sample is of concern. This imbalance in means between groups could increase bias in treatment effect estimation. Additionally, the ratio of standard deviations in the matched sample is only close to 1.0 for 1 of 3 continuous covariates. The greater variance in mother’s age at birth in the treatment group compared to the control group is also concerning for the same reasons of possibly increasing bias in treatment effect estimation.
 
 ```{r Q4d}
 ps.m1.bal <- checkBalance(df=dt, confounders=confounders, wt_var='wt')
@@ -256,8 +259,9 @@ plotMeanDiff = function(balance_object, name){
   df$var = as.factor(row.names(df))
   colnames(df) = c('unmatched','matched','var')
   df = melt(df)
-  ggplot(df, aes(x = value, y = var, shape = variable, color = variable)) + 
-    geom_point() + 
+
+  ggplot(df, aes(x = value, y = var)) + 
+    geom_point(aes(shape = variable, color=variable)) + 
     geom_vline(xintercept=0, color='blue') + 
     geom_vline(xintercept=-.05, color='orange', linetype='dotted') + 
     geom_vline(xintercept=.05, color='orange', linetype='dotted') + 
@@ -275,6 +279,7 @@ plotSDRatios = function(balance_object,name){
   df$var = as.factor(row.names(df))
   colnames(df) = c('unmatched','matched','var')
   df = melt(df)
+
   ggplot(df, aes(x = value, y = var, shape = variable, color = variable)) + 
     geom_point() + 
     geom_vline(xintercept=1, color='blue') + 
@@ -327,23 +332,23 @@ Brief descriptions of each of the methods:
 
 **(1) Probit Regression**
 
-A probit regression is equivalent to the logistic regression except that it replaces the logistic with the normal distribution. So:
+A probit regression is equivalent to the logistic regression except that it replaces the logistic with the normal distribution:
 
 $$Pr(y_{i} = 1) = \Phi(X_{i}B)$$
 
-Where $\Phi$ is the normal cumulative distribution function. There is strong overlap between the control and treatment distributions over the propensity score so no observations were dropped. We using matching with replacement 
+Where $\Phi$ is the normal cumulative distribution function. There is strong overlap between the control and treatment distributions over the propensity score so no observations were dropped. We use matching with replacement.
 
 **(2) Mahalanobis Matching**
 
-Mahalanobis matching uses a distance measure in multivariate space that takes into account variances of variables as well as covariances between them. 
+Mahalanobis matching uses a distance measure in multivariate space that takes into account variances of variables as well as covariances between them. We match, with replacement, based on the calculated Mahalanobis distance.
 
 **(3) Matching without Replacement (Using propensity scores from original logistic regression)**
 
-We use the original propensity scores Q2. This time, we match without replacement.
+We use the original propensity scores from Question 2. This time, we match without replacement.
 
 **(4) Nearest Neighbor Matching with Replacement**
 
-We use K-closest matching with k = 2. This matching method selects the 2 control subjects with the closest distance to the treated subject (using `default=logit`). Matches are chosen for treatment subjects one at a time using the default order (largest to smallest). We allow for replacement.
+We use K-nearest neighbor matching with k = 2. This matching method selects the 2 control subjects with the closest distance to the treated subject (using `default=logit`). Matches are chosen for treatment subjects one at a time using the default order (largest to smallest). We allow for replacement.
 
 
 **Fit new propensity score models**
@@ -415,9 +420,9 @@ zz <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm 
 all(round(dt$wt_mh, 5) == round(zz$weights, 5))
 ```
 
-**K-2 Matching with Replacement**
+**KNN (K=2) Matching with Replacement**
 ```{r Q5.k2nn}
-# Check against MatchIt function  
+# KNN (K=2) 
 df = dt[,c('treat',confounders)]
 k2 <- matchit(treat ~ momage + b.marr + prenatal + booze + first + bw + preterm + black + hispanic + lths + hs + college + st9 + st25 + st42, data=df, method="nearest",
               ratio=2, replace=T)
@@ -527,8 +532,9 @@ compareRatios <- compareBalance(model_bals, model_names, 8)
 
 `r compareRatios`
 
-We compare the mean differences and ratios of standard deviations among confounders between the treatment and control groups to assess which propensity and/or matching approach results in the best balance. We aim to reduce the mean differences to below 0.10 for continuous variables and 0.05 for binary variables. For the ratio of standard deviations, we aim to get as close to 1.0 as possible. Considering the number of confounders and approaches, the above tables can make assessments of which approach is best due to the number of values to compare. The plots from Question 5 aid in comparing mean differences and ratios of standard deviations.  
-We prioritize balancing mean differences over ratios because we only consider 3 continuous confounders, and none of the approaches are significantly better in balancing the ratios. The Mahalanobis matching approach achieved the best balance in mean differences, and thus we choose this approach.
+We compare the mean differences and ratios of standard deviations among confounders between the treatment and control groups to assess which propensity and/or matching approach results in the best balance. We aim to reduce the mean differences to below 0.10 for continuous variables and 0.05 for binary variables. For the ratio of standard deviations, we aim to get as close to 1.0 as possible. The above tables can make assessments and comparisons between approaches difficult, so we also use the balance plots from Question 5 to aid in comparing mean differences and ratios of standard deviations.  
+We prioritize balancing mean differences over ratios. The ratios of standard deviations are only relevant for continuous confounders, of which we only have 3 in our model. Moreover, none of the propensity score or matching approaches significantly improve balance in the variance between groups in any of the 3 continuous confounders. Thus we place more emphasize balancing mean differences in choosing an approach.  
+Focusing on the mean differences, we find the Mahalanobis matching approach achieved the best balance in mean differences between confounders in the matched sample. This is easy to see from the balance plot in Question 5, which achieves mean differences close to 0 in the majority of our confounders. This balance in mean differences is not achieved by any of the other approaches.
 
 
 
@@ -601,7 +607,7 @@ Stable unit treatment value assumption states that the treatment effect does not
 ## Question 10: Causal Interpretation Provide a causal interpretation of *one* of your estimates above. Remember to specify the counterfactual and to be clear about whom you are making inferences. Also make sure to use causal (counterfactual) language.
 
 \texttt{ANSWER:}  
-For children who participated in the IDHP intervention, their IQ scores at age 3 were `r round(mod4.out[1], 1)` points higher than had they not participated in the intervention.
+For children who participated in the IDHP intervention, their IQ scores at age 3 were `r round(mod4.out[1], 1)` points `r ifelse(mod4.out[1]>0, 'higher', 'lower')` than had they not participated in the intervention.
 
 
 
@@ -626,4 +632,4 @@ A group of children who participate in the IHDP intervention will expect, on ave
 ### (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
 
 \texttt{ANSWER:}  
-In terms of estimating causal effects, propensity score approaches are preferred over linear regression to account for the systematic differences between the treatment and control groups in key covariates that can affect the outcome. While linear regression can account for some group differences, the method is highly dependent on correct model specificity in order avoid treatment effect estimation bias. Propensity score approaches decrease this bias by restructuring the sample of controls and/or treated observations so that there is overlap in the common support of the covariates between groups, and improved balance in distributions of the covariates between groups. Propensity score approaches decrease the treatment effect estimation bias caused by extrapolating into areas of the covariate space outside of the support of the data, and incorrect model specification of the treatment and covariates on the outcome.
+In terms of estimating causal effects, propensity score approaches are preferred over linear regression to account for the systematic differences between the treatment and control groups in key covariates that can affect the outcome. While linear regression can account for some group differences, the method is highly dependent on correct model specification in order avoid treatment effect estimation bias. In comparison, propensity score approaches are non-parametric so we avoid any strong assumptions about correct model specification. Additionally, propensity score approaches decrease this bias by restructuring the sample of controls and/or treated observations so that there is overlap in the common support of the covariates between groups, and improved balance in distributions of the covariates between groups. Propensity score approaches decrease the treatment effect estimation bias caused by extrapolating into areas of the covariate space outside of the support of the data, and incorrect model specification of the treatment and covariates on the outcome. However, propensity score approaches still rely on the strong assumption that there is no omitted variable bias, that is all confounders have been controlled for.
