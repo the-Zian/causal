@@ -175,7 +175,7 @@ examine_overlap(dt, nbins=20, var='momage', var_name='Birth weight', xlab='Birth
 These plots reveal we have enough overlap to estimate the average treatment effect on the treated. Between the treatment and control groups, we examined the overlap in propensity scores, preterm, and birth weight covariates. A few notes.  
 One, due to the imbalance in number of observations between treatment and control groups, comparing paired histograms can misleadingly imply lack of overlap. We addressed this issue by limiting the range of y-axis in the plots, effectively “zooming in”, so that all histogram bins are clearly visible.  
 Two, notice in the paired histograms for the propensity score that there are no control observations in the highest bin group of propensity scores (0.975-1.00). This may suggest there is not complete overlap, however, it is also an artifact of the histogram bin size. Doubling the bin size from 0.025 to 0.05 propensity score units eliminates this lack of overlap.  
-Lastly, there is not complete overlap in birth weight between the treatment and control groups. However, the complete overlap in the propensity score indicates that in the matched sample there should be overlap between across the multi-dimensional covariate space. Thus we are unconcerned with this lack of complete overlap in birth weight.
+Lastly, there is not complete overlap in birth weight between the treatment and control groups. However, the complete overlap in the propensity score indicates that in the matched sample there should be overlap between groups across the multi-dimensional covariate space. Thus we are unconcerned with this lack of complete overlap in birth weight.
 
 
 ### (c) Examining Balance. You will build your own function to check balance! This function should take as inputs the data frame created in Question 1, the vector with the covariate names chosen in Question 1, and the weights created in Question 2. It should output the following:  
@@ -626,7 +626,7 @@ round(summary(lm1)$coefficients['treat', c('Estimate', 'Std. Error'), drop=FALSE
 ### (b) Interpret your results non-causally
 
 \texttt{ANSWER:}  
-A group of children who participate in the IHDP intervention will have, on average, an 11.54 point increase in their age 3 IQ scores compared to a group of children who did not participate in the intervention, controlling for all other covariates.
+We expect that a group of children who participate in the IHDP intervention will have, on average, an 11.54 point increase in their age 3 IQ scores compared to a group of children who did not participate in the intervention, controlling for all other covariates.
 
 
 ### (c) Why might we prefer the results from the propensity score approach to the linear regression results in terms of identifying a causal effect?
